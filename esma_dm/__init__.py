@@ -27,16 +27,36 @@ __version__ = "0.1.0"
 __author__ = "Robin"
 __description__ = "ESMA Data Manager - Comprehensive wrapper for ESMA published data"
 
-from .firds import FIRDSClient
+from .firds import (
+    FIRDSClient,
+    FIRDSFile,
+    FileType,
+    AssetType,
+    CommodityBaseProduct,
+    OptionType,
+    ExerciseStyle,
+    DeliveryType,
+    BondSeniority
+)
 from .fitrs import FITRSClient
 from .benchmarks import BenchmarksClient
 from .ssr import SSRClient
 from .config import Config
 
 __all__ = [
+    # Clients
     "FIRDSClient",
     "FITRSClient", 
     "BenchmarksClient",
     "SSRClient",
     "Config",
+    # FIRDS Types
+    "FIRDSFile",
+    "FileType",
+    "AssetType",
+    "CommodityBaseProduct",
+    "OptionType",
+    "ExerciseStyle",
+    "DeliveryType",
+    "BondSeniority",
 ]

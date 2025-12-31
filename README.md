@@ -4,34 +4,19 @@ A comprehensive Python package for accessing ESMA (European Securities and Marke
 
 ## Features
 
-🎯 **Modular Design** - Separate clients for different ESMA datasets
+**Modular Design** - Separate clients for different ESMA datasets:
 - **FIRDS** - Financial Instruments Reference Data System
 - **FITRS** - Financial Instruments Transparency System
 - **SSR** - Short Selling Regulation exempted shares
-- **Benchmarks** - Benchmark data (coming soon)
+- **Benchmarks** - Benchmark data
 
-📦 **Easy to Use** - Simple, intuitive API
-```python
-from esma_dm import FIRDSClient, FITRSClient
+**RTS 23 Compliant** - Implements specifications from Commission Delegated Regulation (EU) supplementing MiFIR
 
-# Get equity reference data
-firds = FIRDSClient()
-equities = firds.get_latest_full_files(asset_type='E')
+**Type-Safe** - Comprehensive enums and dataclasses for standardized classifications
 
-# Get transparency data
-fitrs = FITRSClient()
-transparency = fitrs.get_latest_full_files(asset_type='E')
-```
+**Validation Utilities** - Built-in validators for ISIN (ISO 6166), LEI (ISO 17442), and CFI (ISO 10962) codes
 
-⚡ **Performance Optimized**
-- Built-in caching mechanism
-- Batch operations support
-- Efficient XML parsing
-
-🔧 **Configurable**
-- Custom download directories
-- Logging levels
-- Cache control
+**Performance Optimized** - Built-in caching, batch operations, efficient XML parsing
 
 ## Installation
 
@@ -44,7 +29,7 @@ pip install esma-dm
 ```bash
 git clone https://github.com/yourusername/esma-dm.git
 cd esma-dm
-pip install -e ".[dev]"
+pip install -e .
 ```
 
 ## Quick Start
@@ -52,24 +37,35 @@ pip install -e ".[dev]"
 ### FIRDS - Reference Data
 
 ```python
-from esma_dm import FIRDSClient
+from esma_dm import FIRDSClient, AssetType
 
 # Initialize client
 firds = FIRDSClient(date_from='2024-01-01')
 
+# Get reference data for a single ISIN
+ref = firds.reference('US0378331005')
+if ref is not None:
+    print(f"Name: {ref['FullNm']}")
+    print(f"CFI: {ref['ClssfctnTp']}")
+    print(f"Currency: {ref['NtnlCcy']}")
+
 # Get all available files
 files = firds.get_file_list()
-print(files[['file_name', 'publication_date']])
 
 # Get latest equity instruments
 equities = firds.get_latest_full_files(asset_type='E')
-print(f"Retrieved {len(equities)} equity instruments")
 
-# Get specific ISINs
-instruments = firds.get_instruments([
-    'GB00B1YW4409',  # Sage Group
-    'US0378331005',  # Apple Inc
-])
+# Get multiple ISINs with validation
+isins = ['GB00B1YW4409', 'US0378331005']
+valid_isins = [i for i in isins if FIRDSClient.validate_isin(i)]
+instruments = firds.get_instruments(valid_isins)
+
+# Track changes with delta files
+changes = firds.get_delta_files(
+    asset_type='E',
+    date_from='2024-12-01',
+    date_to='2024-12-31'
+)
 ```
 
 ### FITRS - Transparency Data
@@ -81,19 +77,13 @@ from esma_dm import FITRSClient
 fitrs = FITRSClient(date_from='2024-01-01')
 
 # Get equity transparency data
-eq_transparency = fitrs.get_latest_full_files(
+transparency = fitrs.get_latest_full_files(
     asset_type='E',
     instrument_type='equity'
 )
 
 # Get DVCAP (Double Volume Cap) data
 dvcap = fitrs.get_dvcap_latest()
-
-# Get transparency for specific ISINs
-my_transparency = fitrs.get_instruments([
-    'GB00B1YW4409',
-    'US0378331005'
-])
 ```
 
 ### SSR - Short Selling Regulation
@@ -105,23 +95,167 @@ from esma_dm import SSRClient
 ssr = SSRClient()
 
 # Get currently active exemptions
-active_exemptions = ssr.get_exempted_shares(today_only=True)
+active = ssr.get_exempted_shares(today_only=True)
 
-# Get exemptions for specific country
+# Get exemptions by country
 uk_exemptions = ssr.get_exempted_shares_by_country('GB')
-
-# Get all exemptions (including expired)
-all_exemptions = ssr.get_exempted_shares(today_only=False)
 ```
 
-## Configuration
+## FIRDS Advanced Features
 
-### Using Default Configuration
+### File Filtering
 
 ```python
 from esma_dm import FIRDSClient
 
-# Uses default configuration (~/.esma_dm/data)
+firds = FIRDSClient()
+
+# Filter by file type
+fulins = firds.get_file_list(file_type='FULINS')  # Full snapshots
+dltins = firds.get_file_list(file_type='DLTINS')  # Delta/incremental
+
+# Filter by asset type
+equity_files = firds.get_file_list(asset_type='E')
+
+# Combined filters
+equity_fulins = firds.get_file_list(file_type='FULINS', asset_type='E')
+```
+
+### Structured Metadata
+
+```python
+from esma_dm import FIRDSClient, FIRDSFile
+
+firds = FIRDSClient()
+
+# Get structured file metadata
+files = firds.get_files_metadata(file_type='FULINS', asset_type='E')
+
+for f in files:
+    print(f.file_name)        # FULINS_E_20241231_1of2.zip
+    print(f.asset_type)       # E
+    print(f.date_extracted)   # 20241231
+    print(f.part_number)      # 1
+    print(f.total_parts)      # 2
+```
+
+### Validation Utilities
+
+```python
+from esma_dm import FIRDSClient
+
+# Validate ISIN (ISO 6166)
+assert FIRDSClient.validate_isin('US0378331005')  # True
+assert not FIRDSClient.validate_isin('INVALID')   # False
+
+# Validate LEI (ISO 17442)
+assert FIRDSClient.validate_lei('549300VALTPVHYSYMH70')  # True
+
+# Validate CFI (ISO 10962)
+assert FIRDSClient.validate_cfi('ESVUFR')  # True
+```
+
+## Data Models
+
+### Normalized Reference Data
+
+The package includes normalized data models for all asset types:
+
+```python
+from esma_dm.models import InstrumentMapper
+
+# Parse FIRDS data to typed models
+mapper = InstrumentMapper()
+instruments = [mapper.from_row(row) for _, row in df.iterrows()]
+
+# Access typed attributes
+for instrument in instruments:
+    if instrument.is_debt():
+        print(f"{instrument.isin}: {instrument.maturity_date}")
+    elif instrument.is_equity():
+        print(f"{instrument.isin}: {instrument.has_voting_rights}")
+```
+
+### Schema Introspection
+
+```python
+from esma_dm.models import DebtInstrument, EquityInstrument
+
+# Get schema information
+debt_schema = DebtInstrument.get_schema()
+for field, info in debt_schema.items():
+    print(f"{field}: {info['type']} - {info['description']}")
+```
+
+## Enums and Classifications
+
+### Asset Types (ISO 10962 CFI)
+
+```python
+from esma_dm import AssetType
+
+AssetType.EQUITY                # "E" - Equities
+AssetType.DEBT                  # "D" - Debt instruments
+AssetType.FUTURES               # "F" - Futures
+AssetType.OPTIONS               # "I" - Options
+AssetType.SWAPS                 # "S" - Swaps
+AssetType.COLLECTIVE_INVESTMENT # "C" - Collective investment vehicles
+AssetType.RIGHTS                # "H" - Rights, warrants
+AssetType.STRATEGIES            # "J" - Strategies, multi-leg
+AssetType.OTHERS                # "O" - Others
+AssetType.REFERENTIAL           # "R" - Referential instruments
+```
+
+### Commodity Classifications
+
+```python
+from esma_dm import CommodityBaseProduct
+
+CommodityBaseProduct.AGRI  # Agricultural
+CommodityBaseProduct.NRGY  # Energy
+CommodityBaseProduct.METL  # Metals
+CommodityBaseProduct.EMIS  # Emissions
+```
+
+### Option Classifications
+
+```python
+from esma_dm import OptionType, ExerciseStyle, DeliveryType
+
+# Option types
+OptionType.CALL  # Call option
+OptionType.PUT   # Put option
+
+# Exercise styles
+ExerciseStyle.EURO  # European
+ExerciseStyle.AMER  # American
+ExerciseStyle.BRMN  # Bermudan
+ExerciseStyle.ASIA  # Asian
+
+# Delivery types
+DeliveryType.PHYS  # Physical delivery
+DeliveryType.CASH  # Cash settlement
+```
+
+### Bond Seniority
+
+```python
+from esma_dm import BondSeniority
+
+BondSeniority.SNDB  # Senior debt
+BondSeniority.MZZD  # Mezzanine
+BondSeniority.SBOD  # Subordinated
+BondSeniority.JUND  # Junior
+```
+
+## Configuration
+
+### Default Configuration
+
+```python
+from esma_dm import FIRDSClient
+
+# Uses default configuration (./downloads/data)
 firds = FIRDSClient()
 ```
 
@@ -131,21 +265,19 @@ firds = FIRDSClient()
 from esma_dm import FIRDSClient, Config
 from pathlib import Path
 
-# Create custom configuration
 config = Config(
-    downloads_path=Path("/custom/path/to/data"),
+    downloads_path=Path("/custom/path"),
     cache_enabled=True,
-    log_level="DEBUG"
+    log_level="INFO"
 )
 
-# Use custom configuration
 firds = FIRDSClient(config=config)
 ```
 
 ### Environment Variables
 
 ```bash
-export ESMA_DM_DOWNLOADS_PATH="/custom/path/to/data"
+export ESMA_DM_DOWNLOADS_PATH="/custom/path"
 export ESMA_DM_CACHE_ENABLED="true"
 export ESMA_DM_LOG_LEVEL="INFO"
 ```
@@ -153,119 +285,36 @@ export ESMA_DM_LOG_LEVEL="INFO"
 ```python
 from esma_dm import Config, FIRDSClient
 
-# Load configuration from environment
 config = Config.from_env()
 firds = FIRDSClient(config=config)
 ```
-
-## Asset Types
-
-ESMA uses CFI (Classification of Financial Instruments) codes. The first character represents the asset type:
-
-| Code | Asset Type | Description |
-|------|------------|-------------|
-| C | Collective Investment | Investment funds, ETFs |
-| D | Debt | Bonds, notes, treasury bills |
-| E | Equity | Shares, stocks |
-| F | Futures | Future contracts |
-| H | Rights | Subscription rights |
-| I | Options | Options contracts |
-| J | Strategies | Structured products |
-| O | Others | Miscellaneous |
-| R | Referential | Reference instruments |
-| S | Swaps | Swap contracts |
-
-## Advanced Usage
-
-### Batch Processing
-
-```python
-from esma_dm import FIRDSClient
-
-firds = FIRDSClient()
-
-# Get consolidated data for asset type
-consolidated = firds.get_batch_consolidated_data(asset_type='E')
-
-# Process multiple ISINs efficiently
-isin_list = ['GB00B1YW4409', 'US0378331005', 'DE0005140008']
-instruments = firds.get_instruments(isin_list)
-```
-
-### Force Update (Skip Cache)
-
-```python
-from esma_dm import FIRDSClient
-
-firds = FIRDSClient()
-
-# Force re-download and update cache
-fresh_data = firds.get_latest_full_files(
-    asset_type='E',
-    update=True  # Skip cache, download fresh
-)
-```
-
-### Download Specific Files
-
-```python
-from esma_dm import FIRDSClient
-
-firds = FIRDSClient()
-
-# Get file list
-files = firds.get_file_list()
-
-# Download specific file by URL
-specific_file = files.iloc[0]
-df = firds.download_file(specific_file['download_link'])
-```
-
-## Data Structure
-
-### FIRDS Reference Data
-
-Typical columns include:
-- `Id` - ISIN identifier
-- `FullNm` - Full name of instrument
-- `ClssfctnTp` - Classification type (CFI code)
-- `CmmdtyDerivInd` - Commodity derivative indicator
-- `NtnlCcy` - Notional currency
-- `TradgVnRltdAttrbts_*` - Trading venue attributes
-
-### FITRS Transparency Data
-
-Typical columns include:
-- `Id` - ISIN identifier
-- `TradgVn` - Trading venue
-- `AvrgDalyNbOfTxs` - Average daily number of transactions
-- `AvrgDalyTrnvr` - Average daily turnover
-- `AvrgTxVal` - Average transaction value
-
-## Documentation
-
-For detailed documentation on ESMA datasets, see:
-- [FIRDS Instructions](https://www.esma.europa.eu/database-library/registers-and-data)
-- [MiFID II Transparency](https://www.esma.europa.eu/policy-rules/mifid-ii-and-mifir)
 
 ## Project Structure
 
 ```
 esma-dm/
 ├── esma_dm/
-│   ├── __init__.py       # Package initialization
-│   ├── config.py         # Configuration management
-│   ├── utils.py          # Shared utilities
-│   ├── firds.py          # FIRDS client
-│   ├── fitrs.py          # FITRS client
-│   ├── ssr.py            # SSR client
-│   └── benchmarks.py     # Benchmarks client (stub)
-├── docs/                 # Documentation PDFs
-├── examples/             # Usage examples
-├── tests/                # Unit tests
-├── setup.py              # Package setup
-├── README.md             # This file
-└── requirements.txt      # Dependencies
+│   ├── __init__.py
+│   ├── config.py
+│   ├── utils.py
+│   ├── firds.py
+│   ├── fitrs.py
+│   ├── ssr.py
+│   ├── benchmarks.py
+│   └── models/
+│       ├── __init__.py
+│       ├── base.py
+│       ├── debt.py
+│       ├── equity.py
+│       ├── derivative.py
+│       └── mapper.py
+├── examples/
+├── tools/
+├── docs/
+│   └── rts_23_financial_instrument_reference_data_schema.md
+├── README.md
+├── CHANGELOG.md
+└── setup.py
 ```
 
 ## Requirements
@@ -277,38 +326,20 @@ esma-dm/
 - lxml >= 4.6.0
 - tqdm >= 4.60.0
 
-## Contributing
+## Documentation
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+For detailed information on ESMA datasets:
+- [ESMA Registers and Data](https://www.esma.europa.eu/database-library/registers-and-data)
+- [MiFID II Transparency](https://www.esma.europa.eu/policy-rules/mifid-ii-and-mifir)
+- [RTS 23 Schema Reference](docs/rts_23_financial_instrument_reference_data_schema.md)
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License.
 
 ## Disclaimer
 
 This package is not affiliated with or endorsed by ESMA. It is an independent tool for accessing publicly available ESMA data.
 
-## Support
 
-For issues and questions:
-- GitHub Issues: https://github.com/yourusername/esma-dm/issues
-- Documentation: https://github.com/yourusername/esma-dm#readme
 
-## Changelog
-
-### 0.1.0 (2025-01-XX)
-- Initial release
-- FIRDS client implementation
-- FITRS client implementation
-- SSR client implementation
-- Benchmarks client stub
-- Configuration management
-- Caching system
-- XML parsing utilities

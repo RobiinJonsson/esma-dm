@@ -186,6 +186,18 @@ class InstrumentMapper:
         return str(value).strip()
     
     @staticmethod
+    def _parse_bool(value: Any) -> Optional[bool]:
+        """Parse boolean from string or return None."""
+        if pd.isna(value) or value is None or value == '':
+            return None
+        str_val = str(value).strip().lower()
+        if str_val in ('true', '1', 'yes', 't', 'y'):
+            return True
+        elif str_val in ('false', '0', 'no', 'f', 'n'):
+            return False
+        return None
+    
+    @staticmethod
     def _parse_record_type(row: pd.Series) -> Optional[RecordType]:
         """Determine record type from DLTINS fields."""
         if 'ModfdRcrd_New' in row and row['ModfdRcrd_New'] == 'true':
@@ -239,7 +251,7 @@ class InstrumentMapper:
         """Extract trading venue attributes from row."""
         return TradingVenueAttributes(
             venue_id=cls._parse_string(cls._get_value(row, 'TradgVnRltdAttrbts_Id')),
-            issuer_request=cls._parse_string(cls._get_value(row, 'TradgVnRltdAttrbts_IssrReq')),
+            issuer_request=cls._parse_bool(cls._get_value(row, 'TradgVnRltdAttrbts_IssrReq')),
             admission_approval_date=cls._parse_date(cls._get_value(row, 'TradgVnRltdAttrbts_AdmssnApprvlDtByIssr')),
             request_for_admission_date=cls._parse_date(cls._get_value(row, 'TradgVnRltdAttrbts_ReqForAdmssnDt')),
             first_trade_date=cls._parse_date(cls._get_value(row, 'TradgVnRltdAttrbts_FrstTradDt')),
@@ -257,7 +269,7 @@ class InstrumentMapper:
                 cls._get_value(row, 'TechRcrdAttrbts_PblctnPrd_FrDt', 'TechAttrbts_PblctnPrd_FrDt')
             ),
             relevant_trading_venue=cls._parse_string(cls._get_value(row, 'TechRcrdAttrbts_RlvntTradgVn')),
-            never_published=cls._parse_string(cls._get_value(row, 'TechRcrdAttrbts_NvrPblshd')) == 'true',
+            never_published=cls._parse_bool(cls._get_value(row, 'TechRcrdAttrbts_NvrPblshd')),
         )
     
     @classmethod
