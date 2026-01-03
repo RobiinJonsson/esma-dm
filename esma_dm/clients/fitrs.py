@@ -11,8 +11,8 @@ from enum import Enum
 import pandas as pd
 import requests
 
-from .utils import Utils
-from .config import default_config
+from ..utils import Utils
+from ..config import default_config
 
 
 class InstrumentType(Enum):

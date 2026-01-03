@@ -1,0 +1,205 @@
+================================================================================
+FIRDS Vectorized Database Schema
+Database: downloads/data/firds/firds_vectorized.db
+================================================================================
+
+Tables: 6
+--------------------------------------------------------------------------------
+  - debt_instruments
+  - derivative_instruments
+  - equity_instruments
+  - instruments
+  - metadata
+  - other_instruments
+
+================================================================================
+TABLE: debt_instruments
+================================================================================
+
+Schema:
+--------------------------------------------------------------------------------
+  isin                           VARCHAR         [PRI] NOT NULL
+  short_name                     VARCHAR        
+  maturity_date                  DATE           
+  total_issued_nominal_amount    DOUBLE         
+  nominal_value_per_unit         DOUBLE         
+  interest_rate_type             VARCHAR        
+  fixed_rate                     DOUBLE         
+  floating_rate_reference        VARCHAR        
+  debt_seniority                 VARCHAR        
+  trading_venue_id               VARCHAR        
+  first_trade_date               DATE           
+  termination_date               DATE           
+
+Row count: 206,609
+
+Sample data (first 3 rows):
+--------------------------------------------------------------------------------
+        isin                          short_name maturity_date  total_issued_nominal_amount  nominal_value_per_unit interest_rate_type  fixed_rate floating_rate_reference debt_seniority trading_venue_id first_trade_date termination_date
+US26441CBJ36  DUKE ENERGY COR/0.9 SR NT 20250915    2025-09-15                  650000000.0                     NaN               None         NaN                    None           SNDB             None       2021-06-09       2025-09-15
+US26441CBW47 DUKE ENERGY COR/5 SR NT 20271208 SR    2027-12-08                  500000000.0                     NaN               None         NaN                    None           SNDB             None       2022-12-07       2027-12-08
+US276480AG56 EASTN GAS TRANS/3 SR NT 20291115 SR    2029-11-15                  425807000.0                     NaN               None         NaN                    None           SNDB             None       2021-11-18       2029-11-15
+
+Indexes:
+--------------------------------------------------------------------------------
+  - idx_debt_venue
+
+
+================================================================================
+TABLE: derivative_instruments
+================================================================================
+
+Schema:
+--------------------------------------------------------------------------------
+  isin                           VARCHAR         [PRI] NOT NULL
+  short_name                     VARCHAR        
+  expiry_date                    DATE           
+  price_multiplier               DOUBLE         
+  underlying_isin                VARCHAR        
+  underlying_index_name          VARCHAR        
+  base_product                   VARCHAR        
+  sub_product                    VARCHAR        
+  option_type                    VARCHAR        
+  strike_price                   DOUBLE         
+  strike_price_currency          VARCHAR        
+  delivery_type                  VARCHAR        
+  trading_venue_id               VARCHAR        
+  first_trade_date               DATE           
+  termination_date               DATE           
+
+Row count: 48,055
+
+Sample data (first 3 rows):
+--------------------------------------------------------------------------------
+        isin           short_name expiry_date  price_multiplier underlying_isin underlying_index_name base_product sub_product option_type  strike_price strike_price_currency delivery_type trading_venue_id first_trade_date termination_date
+DE000C28C7N1       EEX/F 20250528  2025-05-28               1.0            None                  None         None        None        None           NaN                  None          CASH             None       2023-09-28       2025-05-29
+NO0012469511 FISH POOL/F 20250411  2025-04-11            1000.0            None                  None         None        None        None           NaN                  None          CASH             None       2022-03-09       2025-04-11
+NO0012469636 FISH POOL/F 20260410  2026-04-10            1000.0            None                  None         None        None        None           NaN                  None          CASH             None       2022-03-09       2026-04-10
+
+Indexes:
+--------------------------------------------------------------------------------
+  - idx_deriv_venue
+
+
+================================================================================
+TABLE: equity_instruments
+================================================================================
+
+Schema:
+--------------------------------------------------------------------------------
+  isin                           VARCHAR         [PRI] NOT NULL
+  short_name                     VARCHAR        
+  dividend_payment_frequency     VARCHAR        
+  voting_rights_per_share        VARCHAR        
+  ownership_restriction          VARCHAR        
+  redemption_type                VARCHAR        
+  capital_investment_restriction VARCHAR        
+  trading_venue_id               VARCHAR        
+  first_trade_date               DATE           
+  termination_date               DATE           
+
+Row count: 192,882
+
+Sample data (first 3 rows):
+--------------------------------------------------------------------------------
+        isin               short_name dividend_payment_frequency voting_rights_per_share ownership_restriction redemption_type capital_investment_restriction trading_venue_id first_trade_date termination_date
+CA89238H1091 TOYOTA MTR CDR /CDR REGS                       None                    None                  None            None                           None             None       2025-02-20              NaT
+US71716F1021      PHARMARON BEIJI/ADR                       None                    None                  None            None                           None             None       2022-02-18              NaT
+BRA1BBBDR009        ABB LTD/UnSBDR QI                       None                    None                  None            None                           None             None       2020-10-19              NaT
+
+Indexes:
+--------------------------------------------------------------------------------
+  - idx_equity_venue
+
+
+================================================================================
+TABLE: instruments
+================================================================================
+
+Schema:
+--------------------------------------------------------------------------------
+  isin                           VARCHAR         [PRI] NOT NULL
+  cfi_code                       VARCHAR        
+  instrument_type                VARCHAR        
+  issuer                         VARCHAR        
+  full_name                      VARCHAR        
+  currency                       VARCHAR        
+  source_file                    VARCHAR        
+  indexed_at                     TIMESTAMP      
+  updated_at                     TIMESTAMP      
+
+Row count: 447,546
+
+Sample data (first 3 rows):
+--------------------------------------------------------------------------------
+        isin cfi_code instrument_type               issuer                           full_name currency                       source_file                 indexed_at                 updated_at
+DE000C28C7N1   FCACSX               F 529900J0JGLSFDWNFC20                 FABT SI 20250528 CS      EUR FULINS_F_20240601_01of01_data.csv 2026-01-03 16:54:24.819776 2026-01-03 16:54:24.828225
+NO0012469511   FCACSX               F 213800EH1XXWX1VYBV42 Head on gutted salmon 3-6 kg Mar-25      NOK FULINS_F_20240601_01of01_data.csv 2026-01-03 16:54:24.819776 2026-01-03 16:54:24.828225
+NO0012469636   FCACSX               F 213800EH1XXWX1VYBV42 Head on gutted salmon 3-6 kg Mar-26      NOK FULINS_F_20240601_01of01_data.csv 2026-01-03 16:54:24.819776 2026-01-03 16:54:24.828225
+
+Indexes:
+--------------------------------------------------------------------------------
+  - idx_instruments_cfi
+  - idx_instruments_type
+
+
+================================================================================
+TABLE: metadata
+================================================================================
+
+Schema:
+--------------------------------------------------------------------------------
+  file_name                      VARCHAR         [PRI] NOT NULL
+  indexed_at                     TIMESTAMP      
+  instruments_count              INTEGER        
+  file_type                      VARCHAR        
+  file_date                      DATE           
+
+Row count: 3
+
+Sample data (first 3 rows):
+--------------------------------------------------------------------------------
+                        file_name                 indexed_at  instruments_count file_type file_date
+FULINS_F_20240601_01of01_data.csv 2026-01-03 16:54:25.793785              48063    FULINS       NaT
+FULINS_D_20250510_01of03_data.csv 2026-01-03 16:54:34.239848             500000    FULINS       NaT
+FULINS_E_20250510_01of02_data.csv 2026-01-03 16:54:40.741316             500000    FULINS       NaT
+
+
+================================================================================
+TABLE: other_instruments
+================================================================================
+
+Schema:
+--------------------------------------------------------------------------------
+  isin                           VARCHAR         [PRI] NOT NULL
+  short_name                     VARCHAR        
+  trading_venue_id               VARCHAR        
+  first_trade_date               DATE           
+  termination_date               DATE           
+
+Row count: 0
+
+
+================================================================================
+STATISTICS SUMMARY
+================================================================================
+
+Asset Type Distribution:
+--------------------------------------------------------------------------------
+instrument_type       asset_name  count  percentage
+              D Debt Instruments 206609       46.16
+              E         Equities 192882       43.10
+              F          Futures  48055       10.74
+
+================================================================================
+SCHEMA RELATIONSHIPS
+================================================================================
+
+Master Table:
+  instruments (ISIN, CFI, type, issuer, name, currency)
+
+Detail Tables (linked by ISIN):
+  ├── equity_instruments (E)
+  ├── debt_instruments (D)
+  ├── derivative_instruments (F, O, S)
+  └── other_instruments (C, R, H, I, J)

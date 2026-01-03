@@ -12,22 +12,23 @@ This package provides modular access to:
 - SSR: Short Selling Regulation data
 
 Example:
-    >>> from esma_dm import FIRDSClient, FITRSClient
+    >>> from esma_dm import FIRDSClient
     >>> 
-    >>> # Access FIRDS reference data
+    >>> # Initialize client with DuckDB storage (default)
     >>> firds = FIRDSClient()
-    >>> equity_data = firds.get_latest_full_files(asset_type='E')
     >>> 
-    >>> # Access FITRS transparency data
-    >>> fitrs = FITRSClient()
-    >>> transparency = fitrs.get_latest_full_files(asset_type='E')
+    >>> # Download and index latest files
+    >>> firds.download_latest()
+    >>> 
+    >>> # Query reference data
+    >>> instrument = firds.reference('US0378331005')
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __author__ = "Robin"
 __description__ = "ESMA Data Manager - Comprehensive wrapper for ESMA published data"
 
-from .firds import (
+from .clients.firds import (
     FIRDSClient,
     FIRDSFile,
     FileType,
@@ -38,9 +39,9 @@ from .firds import (
     DeliveryType,
     BondSeniority
 )
-from .fitrs import FITRSClient
-from .benchmarks import BenchmarksClient
-from .ssr import SSRClient
+from .clients.fitrs import FITRSClient
+from .clients.benchmarks import BenchmarksClient
+from .clients.ssr import SSRClient
 from .config import Config
 
 __all__ = [
@@ -49,8 +50,8 @@ __all__ = [
     "FITRSClient", 
     "BenchmarksClient",
     "SSRClient",
-    "Config",
-    # FIRDS Types
+    
+    # FIRDS types
     "FIRDSFile",
     "FileType",
     "AssetType",
@@ -59,4 +60,7 @@ __all__ = [
     "ExerciseStyle",
     "DeliveryType",
     "BondSeniority",
+    
+    # Config
+    "Config",
 ]

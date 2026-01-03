@@ -211,12 +211,16 @@ class InstrumentMapper:
     @classmethod
     def _find_column(cls, row: pd.Series, *possible_names: str) -> Optional[str]:
         """Find a column by trying multiple possible names (with/without prefixes)."""
+        # Cache index for faster lookups
+        if not hasattr(row, '_column_cache'):
+            row._column_cache = set(row.index)
+        
         for name in possible_names:
-            if name in row:
+            if name in row._column_cache:
                 return name
             # Try with RefData_ prefix
             prefixed = f"RefData_{name}"
-            if prefixed in row:
+            if prefixed in row._column_cache:
                 return prefixed
         return None
     
@@ -380,7 +384,7 @@ class InstrumentMapper:
         return fields
     
     @classmethod
-    def from_row(cls, row: pd.Series) -> Instrument:
+    def from_row(cls, row: pd.Series) -> Optional[Instrument]:
         """
         Create an Instrument instance from a DataFrame row.
         
@@ -388,42 +392,56 @@ class InstrumentMapper:
             row: DataFrame row with raw ESMA FIRDS data
             
         Returns:
-            Appropriate Instrument subclass based on CFI code
+            Appropriate Instrument subclass based on CFI code, or None if required fields missing
         """
-        # Extract common fields
-        common = cls._extract_common_fields(row)
+        try:
+            # Extract common fields
+            common = cls._extract_common_fields(row)
+            
+            # Check required fields
+            if not common.get('isin'):
+                logger.debug("Skipping row: missing ISIN")
+                return None
+            
+            if not common.get('full_name'):
+                # Use short name or ISIN as fallback
+                common['full_name'] = common.get('short_name') or common.get('isin') or 'Unknown'
+            
+            # Extract nested attributes
+            common['trading_venue'] = cls._extract_trading_venue_attrs(row)
+            common['technical'] = cls._extract_technical_attrs(row)
+            
+            # Determine instrument type from CFI code
+            cfi_code = common.get('classification_type', '')
+            if not cfi_code or len(cfi_code) == 0:
+                # Default to base Instrument if no CFI code
+                return Instrument(**common)
+            
+            asset_type = cfi_code[0]
+            
+            # Create appropriate subclass
+            if asset_type == 'D':
+                # Debt instrument
+                debt_fields = cls._extract_debt_fields(row)
+                return DebtInstrument(**{**common, **debt_fields})
+            
+            elif asset_type == 'E':
+                # Equity instrument
+                equity_fields = cls._extract_equity_fields(row)
+                return EquityInstrument(**{**common, **equity_fields})
+            
+            elif asset_type in ('F', 'I', 'J', 'S', 'H'):
+                # Derivative instrument
+                deriv_fields = cls._extract_derivative_fields(row)
+                return DerivativeInstrument(**{**common, **deriv_fields})
+            
+            else:
+                # Other instrument types (C, O, R, etc.) - use base Instrument
+                return Instrument(**common)
         
-        # Extract nested attributes
-        common['trading_venue'] = cls._extract_trading_venue_attrs(row)
-        common['technical'] = cls._extract_technical_attrs(row)
-        
-        # Determine instrument type from CFI code
-        cfi_code = common.get('classification_type', '')
-        if not cfi_code or len(cfi_code) == 0:
-            # Default to base Instrument if no CFI code
-            return Instrument(**common)
-        
-        asset_type = cfi_code[0]
-        
-        # Create appropriate subclass
-        if asset_type == 'D':
-            # Debt instrument
-            debt_fields = cls._extract_debt_fields(row)
-            return DebtInstrument(**{**common, **debt_fields})
-        
-        elif asset_type == 'E':
-            # Equity instrument
-            equity_fields = cls._extract_equity_fields(row)
-            return EquityInstrument(**{**common, **equity_fields})
-        
-        elif asset_type in ('F', 'I', 'J', 'S', 'H'):
-            # Derivative instrument
-            deriv_fields = cls._extract_derivative_fields(row)
-            return DerivativeInstrument(**{**common, **deriv_fields})
-        
-        else:
-            # Other instrument types (C, O, R, etc.) - use base Instrument
-            return Instrument(**common)
+        except Exception as e:
+            logger.debug(f"Error creating instrument: {e}")
+            return None
     
     @classmethod
     def from_dataframe(cls, df: pd.DataFrame) -> list[Instrument]:

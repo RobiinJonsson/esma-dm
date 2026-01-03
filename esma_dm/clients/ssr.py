@@ -11,8 +11,8 @@ import pandas as pd
 import requests
 from tqdm import tqdm
 
-from .utils import Utils
-from .config import default_config
+from ..utils import Utils
+from ..config import default_config
 
 
 class SSRClient:

@@ -14,9 +14,9 @@ from dataclasses import dataclass
 import pandas as pd
 import requests
 
-from .utils import Utils
-from .config import default_config
-from .storage import StorageBackend, JSONStorage, DuckDBStorage
+from ..utils import Utils
+from ..config import default_config
+from ..storage import StorageBackend, DuckDBStorage
 
 
 class FileType(Enum):
@@ -183,7 +183,7 @@ class FIRDSClient:
         self.date_to = date_to or datetime.today().strftime("%Y-%m-%d")
         self.limit = limit
         self.config = config or default_config
-        self.storage_backend = storage_backend.lower()
+        self.storage_backend = 'duckdb'  # DuckDB is primary backend
         self.db_path = db_path
         
         self.logger = Utils.set_logger("FIRDSClient")
@@ -192,17 +192,11 @@ class FIRDSClient:
     
     @property
     def data_store(self) -> StorageBackend:
-        """Lazy-load data store with configured backend."""
+        """Lazy-load DuckDB data store."""
         if self._data_store is None:
             cache_dir = self.config.downloads_path / 'firds'
             cache_dir.mkdir(parents=True, exist_ok=True)
-            
-            if self.storage_backend == 'json':
-                self._data_store = JSONStorage(cache_dir)
-            elif self.storage_backend == 'duckdb':
-                self._data_store = DuckDBStorage(cache_dir, db_path=self.db_path)
-            else:
-                raise ValueError(f"Unknown storage backend: {self.storage_backend}")
+            self._data_store = DuckDBStorage(cache_dir, db_path=self.db_path)
         
         return self._data_store
     
@@ -700,3 +694,34 @@ class FIRDSClient:
             >>> print(f"Store size: {stats['store_size_mb']:.2f} MB")
         """
         return self.data_store.get_stats()
+    
+    def get_stats_by_asset_type(self) -> pd.DataFrame:
+        """
+        Get aggregated statistics by asset type.
+        
+        Returns breakdown of instruments by CFI asset type with counts and percentages.
+        Asset types follow ISO 10962 classification:
+        - E: Equities
+        - D: Debt Instruments  
+        - C: Collective Investment Vehicles
+        - R: Entitlements (Rights)
+        - O: Options
+        - F: Futures
+        - S: Swaps
+        - H: Non-Listed Complex Derivatives
+        - I: Spot Commodities
+        - J: Forwards
+        
+        Returns:
+            DataFrame with columns: asset_type, asset_name, count, percentage
+            
+        Example:
+            >>> firds = FIRDSClient()
+            >>> stats = firds.get_stats_by_asset_type()
+            >>> print(stats)
+            asset_type           asset_name  count  percentage
+                     E             Equities  50000       25.50
+                     D    Debt Instruments  45000       22.95
+        """
+        return self.data_store.get_stats_by_asset_type()
+

@@ -7,8 +7,8 @@ Currently a placeholder for future implementation.
 from typing import Optional, Any
 import pandas as pd
 
-from .utils import Utils
-from .config import default_config
+from ..utils import Utils
+from ..config import default_config
 
 
 class BenchmarksClient:

@@ -4,6 +4,50 @@ All notable changes to the esma-dm project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+
+#### Vectorized Storage Backend (2026-01-03)
+- DuckDBVectorizedStorage class with star schema architecture
+- Master instruments table with core fields (ISIN, CFI, type, issuer, name, currency)
+- Asset-specific tables: equity_instruments, debt_instruments, derivative_instruments, other_instruments
+- Vectorized bulk loading using pandas groupby and DuckDB bulk insert
+- Performance: 35,000-81,000 instruments/second (640x improvement over row-by-row processing)
+- Indexed columns for fast queries on instrument_type, cfi_code, and trading_venue_id
+- Foreign key relationships between master and detail tables
+
+### Changed
+
+#### Storage Architecture (2026-01-03)
+- Replaced row-by-row mapper processing with vectorized CSV loading
+- Eliminated JSON blob storage in favor of normalized relational schema
+- Each asset type has dedicated table with type-specific fields
+- Query pattern: lookup master table by ISIN, join to specific table by type
+
+### Performance
+
+#### Benchmark Results (2026-01-03)
+- 48K futures: 1.35s (35,540 inst/sec)
+- 500K debt instruments: 8.48s (58,940 inst/sec)
+- 500K equities: 6.49s (77,016 inst/sec)
+- Total: 447K instruments in 16.33s
+- Projection: 11M records in 3-4 minutes
+
+#### Index Manager (2026-01-02)
+- IndexManager class for fast ISIN lookups using lightweight JSON index
+- Automatic index creation and maintenance
+- `rebuild_index()` method to manually rebuild index
+- `get_index_stats()` method to view index statistics
+- Index file stored as `_isin_index.json` in cache directory
+- No database dependencies - simple JSON mapping of ISINs to file locations
+
+#### FIRDS Enhancements (2026-01-02)
+- Enhanced `reference()` method to use index for fast lookups
+- Automatic index rebuild if ISIN not found
+- `use_cache` parameter in `reference()` to control cache usage
+- Efficient row-level reading from CSV files using index
+
 ## [0.1.0] - 2024-12-31
 
 ### Added
