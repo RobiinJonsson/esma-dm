@@ -1,205 +1,431 @@
 ================================================================================
-FIRDS Vectorized Database Schema
-Database: downloads/data/firds/firds_vectorized.db
+FIRDS Database Schema Documentation
 ================================================================================
 
-Tables: 6
+Database: downloads/data/firds/firds_complete.db
+Size: 625.8 MB
+
+Total Tables: 11
+
+================================================================================
+TABLE: civ_instruments
+================================================================================
+
+Columns: 6
+
+Column Name                              Type            Nullable  
+---------------------------------------- --------------- ----------
+isin                                     VARCHAR         NO        
+short_name                               VARCHAR         YES       
+underlying_isin                          VARCHAR         YES       
+trading_venue_id                         VARCHAR         YES       
+first_trade_date                         DATE            YES       
+termination_date                         DATE            YES       
+
+Total Rows: 17,767
+
+Sample Data (first 3 rows):
 --------------------------------------------------------------------------------
-  - debt_instruments
-  - derivative_instruments
-  - equity_instruments
-  - instruments
-  - metadata
-  - other_instruments
+isin            | short_name      | underlying_isin | trading_venue_i | first_trade_dat
+---------------------------------------------------------------------------------------
+LU0370789215    | FidelityFds     | None            | None            | None           
+LU0372507243    | Pictet          | None            | None            | None           
+LU0390134871    | TempletonGlStr  | None            | None            | None           
+
 
 ================================================================================
 TABLE: debt_instruments
 ================================================================================
 
-Schema:
+Columns: 17
+
+Column Name                              Type            Nullable  
+---------------------------------------- --------------- ----------
+isin                                     VARCHAR         NO        
+short_name                               VARCHAR         YES       
+maturity_date                            DATE            YES       
+total_issued_nominal_amount              DOUBLE          YES       
+nominal_value_per_unit                   DOUBLE          YES       
+interest_rate_type                       VARCHAR         YES       
+fixed_rate                               DOUBLE          YES       
+floating_rate_reference                  VARCHAR         YES       
+floating_rate_index                      VARCHAR         YES       
+floating_rate_term_unit                  VARCHAR         YES       
+floating_rate_term_value                 VARCHAR         YES       
+floating_rate_basis_spread               DOUBLE          YES       
+debt_seniority                           VARCHAR         YES       
+delivery_type                            VARCHAR         YES       
+trading_venue_id                         VARCHAR         YES       
+first_trade_date                         DATE            YES       
+termination_date                         DATE            YES       
+
+Total Rows: 206,609
+
+Sample Data (first 3 rows):
 --------------------------------------------------------------------------------
-  isin                           VARCHAR         [PRI] NOT NULL
-  short_name                     VARCHAR        
-  maturity_date                  DATE           
-  total_issued_nominal_amount    DOUBLE         
-  nominal_value_per_unit         DOUBLE         
-  interest_rate_type             VARCHAR        
-  fixed_rate                     DOUBLE         
-  floating_rate_reference        VARCHAR        
-  debt_seniority                 VARCHAR        
-  trading_venue_id               VARCHAR        
-  first_trade_date               DATE           
-  termination_date               DATE           
-
-Row count: 206,609
-
-Sample data (first 3 rows):
---------------------------------------------------------------------------------
-        isin                          short_name maturity_date  total_issued_nominal_amount  nominal_value_per_unit interest_rate_type  fixed_rate floating_rate_reference debt_seniority trading_venue_id first_trade_date termination_date
-US26441CBJ36  DUKE ENERGY COR/0.9 SR NT 20250915    2025-09-15                  650000000.0                     NaN               None         NaN                    None           SNDB             None       2021-06-09       2025-09-15
-US26441CBW47 DUKE ENERGY COR/5 SR NT 20271208 SR    2027-12-08                  500000000.0                     NaN               None         NaN                    None           SNDB             None       2022-12-07       2027-12-08
-US276480AG56 EASTN GAS TRANS/3 SR NT 20291115 SR    2029-11-15                  425807000.0                     NaN               None         NaN                    None           SNDB             None       2021-11-18       2029-11-15
-
-Indexes:
---------------------------------------------------------------------------------
-  - idx_debt_venue
-
-
-================================================================================
-TABLE: derivative_instruments
-================================================================================
-
-Schema:
---------------------------------------------------------------------------------
-  isin                           VARCHAR         [PRI] NOT NULL
-  short_name                     VARCHAR        
-  expiry_date                    DATE           
-  price_multiplier               DOUBLE         
-  underlying_isin                VARCHAR        
-  underlying_index_name          VARCHAR        
-  base_product                   VARCHAR        
-  sub_product                    VARCHAR        
-  option_type                    VARCHAR        
-  strike_price                   DOUBLE         
-  strike_price_currency          VARCHAR        
-  delivery_type                  VARCHAR        
-  trading_venue_id               VARCHAR        
-  first_trade_date               DATE           
-  termination_date               DATE           
-
-Row count: 48,055
-
-Sample data (first 3 rows):
---------------------------------------------------------------------------------
-        isin           short_name expiry_date  price_multiplier underlying_isin underlying_index_name base_product sub_product option_type  strike_price strike_price_currency delivery_type trading_venue_id first_trade_date termination_date
-DE000C28C7N1       EEX/F 20250528  2025-05-28               1.0            None                  None         None        None        None           NaN                  None          CASH             None       2023-09-28       2025-05-29
-NO0012469511 FISH POOL/F 20250411  2025-04-11            1000.0            None                  None         None        None        None           NaN                  None          CASH             None       2022-03-09       2025-04-11
-NO0012469636 FISH POOL/F 20260410  2026-04-10            1000.0            None                  None         None        None        None           NaN                  None          CASH             None       2022-03-09       2026-04-10
-
-Indexes:
---------------------------------------------------------------------------------
-  - idx_deriv_venue
+isin            | short_name      | maturity_date   | total_issued_no | nominal_value_p
+---------------------------------------------------------------------------------------
+USV32257AA10    | ELETSON HOLDING | None            | 344353787.0     | 1.0            
+XS1897339096    | TNB GLOBAL VENT | 2028-11-01      | 750000000.0     | 200000.0       
+XS2999533867    | HARP ISSUER PUB | 2030-12-27      | 1300000.0       | 10000.0        
 
 
 ================================================================================
 TABLE: equity_instruments
 ================================================================================
 
-Schema:
---------------------------------------------------------------------------------
-  isin                           VARCHAR         [PRI] NOT NULL
-  short_name                     VARCHAR        
-  dividend_payment_frequency     VARCHAR        
-  voting_rights_per_share        VARCHAR        
-  ownership_restriction          VARCHAR        
-  redemption_type                VARCHAR        
-  capital_investment_restriction VARCHAR        
-  trading_venue_id               VARCHAR        
-  first_trade_date               DATE           
-  termination_date               DATE           
+Columns: 10
 
-Row count: 192,882
+Column Name                              Type            Nullable  
+---------------------------------------- --------------- ----------
+isin                                     VARCHAR         NO        
+short_name                               VARCHAR         YES       
+dividend_payment_frequency               VARCHAR         YES       
+voting_rights_per_share                  VARCHAR         YES       
+ownership_restriction                    VARCHAR         YES       
+redemption_type                          VARCHAR         YES       
+capital_investment_restriction           VARCHAR         YES       
+trading_venue_id                         VARCHAR         YES       
+first_trade_date                         DATE            YES       
+termination_date                         DATE            YES       
 
-Sample data (first 3 rows):
---------------------------------------------------------------------------------
-        isin               short_name dividend_payment_frequency voting_rights_per_share ownership_restriction redemption_type capital_investment_restriction trading_venue_id first_trade_date termination_date
-CA89238H1091 TOYOTA MTR CDR /CDR REGS                       None                    None                  None            None                           None             None       2025-02-20              NaT
-US71716F1021      PHARMARON BEIJI/ADR                       None                    None                  None            None                           None             None       2022-02-18              NaT
-BRA1BBBDR009        ABB LTD/UnSBDR QI                       None                    None                  None            None                           None             None       2020-10-19              NaT
+Total Rows: 192,882
 
-Indexes:
+Sample Data (first 3 rows):
 --------------------------------------------------------------------------------
-  - idx_equity_venue
+isin            | short_name      | dividend_paymen | voting_rights_p | ownership_restr
+---------------------------------------------------------------------------------------
+CA89238H1091    | TOYOTA MTR CDR  | None            | None            | None           
+US71716F1021    | PHARMARON BEIJI | None            | None            | None           
+BRA1BBBDR009    | ABB LTD/UnSBDR  | None            | None            | None           
+
+
+================================================================================
+TABLE: futures_instruments
+================================================================================
+
+Columns: 13
+
+Column Name                              Type            Nullable  
+---------------------------------------- --------------- ----------
+isin                                     VARCHAR         NO        
+short_name                               VARCHAR         YES       
+expiry_date                              DATE            YES       
+price_multiplier                         DOUBLE          YES       
+underlying_isin                          VARCHAR         YES       
+underlying_index_name                    VARCHAR         YES       
+delivery_type                            VARCHAR         YES       
+commodity_base_product                   VARCHAR         YES       
+commodity_sub_product                    VARCHAR         YES       
+commodity_additional_sub_product         VARCHAR         YES       
+trading_venue_id                         VARCHAR         YES       
+first_trade_date                         DATE            YES       
+termination_date                         DATE            YES       
+
+Total Rows: 48,055
+
+Sample Data (first 3 rows):
+--------------------------------------------------------------------------------
+isin            | short_name      | expiry_date     | price_multiplie | underlying_isin
+---------------------------------------------------------------------------------------
+DE000C28C7N1    | EEX/F 20250528  | 2025-05-28      | 1.0             | None           
+NO0012469511    | FISH POOL/F 202 | 2025-04-11      | 1000.0          | None           
+NO0012469636    | FISH POOL/F 202 | 2026-04-10      | 1000.0          | None           
+
+
+================================================================================
+TABLE: index_instruments
+================================================================================
+
+Columns: 10
+
+Column Name                              Type            Nullable  
+---------------------------------------- --------------- ----------
+isin                                     VARCHAR         NO        
+short_name                               VARCHAR         YES       
+commodity_base_product                   VARCHAR         YES       
+commodity_sub_product                    VARCHAR         YES       
+commodity_additional_sub_product         VARCHAR         YES       
+transaction_type                         VARCHAR         YES       
+final_price_type                         VARCHAR         YES       
+trading_venue_id                         VARCHAR         YES       
+first_trade_date                         DATE            YES       
+termination_date                         DATE            YES       
+
+Total Rows: 2
+
+Sample Data (first 3 rows):
+--------------------------------------------------------------------------------
+isin            | short_name      | commodity_base_ | commodity_sub_p | commodity_addit
+---------------------------------------------------------------------------------------
+EU000A2QMW50    | EEX/F 20291217  | None            | None            | None           
+EU000A2QMW68    | EEX/F 20291217  | None            | None            | None           
 
 
 ================================================================================
 TABLE: instruments
 ================================================================================
 
-Schema:
---------------------------------------------------------------------------------
-  isin                           VARCHAR         [PRI] NOT NULL
-  cfi_code                       VARCHAR        
-  instrument_type                VARCHAR        
-  issuer                         VARCHAR        
-  full_name                      VARCHAR        
-  currency                       VARCHAR        
-  source_file                    VARCHAR        
-  indexed_at                     TIMESTAMP      
-  updated_at                     TIMESTAMP      
+Columns: 9
 
-Row count: 447,546
+Column Name                              Type            Nullable  
+---------------------------------------- --------------- ----------
+isin                                     VARCHAR         NO        
+cfi_code                                 VARCHAR         YES       
+instrument_type                          VARCHAR         YES       
+issuer                                   VARCHAR         YES       
+full_name                                VARCHAR         YES       
+currency                                 VARCHAR         YES       
+source_file                              VARCHAR         YES       
+indexed_at                               TIMESTAMP       YES       
+updated_at                               TIMESTAMP       YES       
 
-Sample data (first 3 rows):
---------------------------------------------------------------------------------
-        isin cfi_code instrument_type               issuer                           full_name currency                       source_file                 indexed_at                 updated_at
-DE000C28C7N1   FCACSX               F 529900J0JGLSFDWNFC20                 FABT SI 20250528 CS      EUR FULINS_F_20240601_01of01_data.csv 2026-01-03 16:54:24.819776 2026-01-03 16:54:24.828225
-NO0012469511   FCACSX               F 213800EH1XXWX1VYBV42 Head on gutted salmon 3-6 kg Mar-25      NOK FULINS_F_20240601_01of01_data.csv 2026-01-03 16:54:24.819776 2026-01-03 16:54:24.828225
-NO0012469636   FCACSX               F 213800EH1XXWX1VYBV42 Head on gutted salmon 3-6 kg Mar-26      NOK FULINS_F_20240601_01of01_data.csv 2026-01-03 16:54:24.819776 2026-01-03 16:54:24.828225
+Total Rows: 2,372,352
 
-Indexes:
+Sample Data (first 3 rows):
 --------------------------------------------------------------------------------
-  - idx_instruments_cfi
-  - idx_instruments_type
+isin            | cfi_code        | instrument_type | issuer          | full_name      
+---------------------------------------------------------------------------------------
+LU0370789215    | CIOGEX          | C               | 549300NEK63VW34 | Fidelity Funds 
+LU0372507243    | CIOGEX          | C               | 5493007Y7JCK1EB | Pictet Timber H
+LU0390134871    | CIOGEX          | C               | W1CUI8HZMLU8JOV | Franklin Temple
+
+
+================================================================================
+TABLE: listed_option_instruments
+================================================================================
+
+Columns: 17
+
+Column Name                              Type            Nullable  
+---------------------------------------- --------------- ----------
+isin                                     VARCHAR         NO        
+short_name                               VARCHAR         YES       
+expiry_date                              DATE            YES       
+price_multiplier                         DOUBLE          YES       
+underlying_isin                          VARCHAR         YES       
+underlying_index_isin                    VARCHAR         YES       
+underlying_index_name                    VARCHAR         YES       
+underlying_basket_isin                   VARCHAR         YES       
+delivery_type                            VARCHAR         YES       
+fx_type                                  VARCHAR         YES       
+fx_other_notional_currency               VARCHAR         YES       
+commodity_base_product                   VARCHAR         YES       
+commodity_sub_product                    VARCHAR         YES       
+commodity_additional_sub_product         VARCHAR         YES       
+trading_venue_id                         VARCHAR         YES       
+first_trade_date                         DATE            YES       
+termination_date                         DATE            YES       
+
+Total Rows: 77,538
+
+Sample Data (first 3 rows):
+--------------------------------------------------------------------------------
+isin            | short_name      | expiry_date     | price_multiplie | underlying_isin
+---------------------------------------------------------------------------------------
+EZYRDBVV8GT8    | NA/FX Fwd Nstd  | 2026-01-20      | 1.0             | None           
+EZYRSXRVJPT5    | NA/Fwd SGD THB  | 2025-06-16      | 1.0             | None           
+EZYSNXXN7HQ3    | NA/Fwd TRY USD  | 2025-07-08      | 1.0             | None           
 
 
 ================================================================================
 TABLE: metadata
 ================================================================================
 
-Schema:
+Columns: 5
+
+Column Name                              Type            Nullable  
+---------------------------------------- --------------- ----------
+file_name                                VARCHAR         NO        
+indexed_at                               TIMESTAMP       YES       
+instruments_count                        INTEGER         YES       
+file_type                                VARCHAR         YES       
+file_date                                DATE            YES       
+
+Total Rows: 10
+
+Sample Data (first 3 rows):
 --------------------------------------------------------------------------------
-  file_name                      VARCHAR         [PRI] NOT NULL
-  indexed_at                     TIMESTAMP      
-  instruments_count              INTEGER        
-  file_type                      VARCHAR        
-  file_date                      DATE           
+file_name       | indexed_at      | instruments_cou | file_type       | file_date      
+---------------------------------------------------------------------------------------
+FULINS_C_202505 | 2026-01-03 17:5 | 127042          | None            | None           
+FULINS_D_202505 | 2026-01-03 17:5 | 500000          | None            | None           
+FULINS_E_202505 | 2026-01-03 17:5 | 500000          | None            | None           
 
-Row count: 3
 
-Sample data (first 3 rows):
+================================================================================
+TABLE: option_instruments
+================================================================================
+
+Columns: 19
+
+Column Name                              Type            Nullable  
+---------------------------------------- --------------- ----------
+isin                                     VARCHAR         NO        
+short_name                               VARCHAR         YES       
+expiry_date                              DATE            YES       
+price_multiplier                         DOUBLE          YES       
+underlying_isin                          VARCHAR         YES       
+underlying_index_isin                    VARCHAR         YES       
+underlying_index_name                    VARCHAR         YES       
+option_type                              VARCHAR         YES       
+option_exercise_style                    VARCHAR         YES       
+strike_price                             DOUBLE          YES       
+strike_price_percentage                  DOUBLE          YES       
+strike_price_basis_points                DOUBLE          YES       
+strike_price_currency                    VARCHAR         YES       
+delivery_type                            VARCHAR         YES       
+fx_type                                  VARCHAR         YES       
+other_notional_currency                  VARCHAR         YES       
+trading_venue_id                         VARCHAR         YES       
+first_trade_date                         DATE            YES       
+termination_date                         DATE            YES       
+
+Total Rows: 998,238
+
+Sample Data (first 3 rows):
 --------------------------------------------------------------------------------
-                        file_name                 indexed_at  instruments_count file_type file_date
-FULINS_F_20240601_01of01_data.csv 2026-01-03 16:54:25.793785              48063    FULINS       NaT
-FULINS_D_20250510_01of03_data.csv 2026-01-03 16:54:34.239848             500000    FULINS       NaT
-FULINS_E_20250510_01of02_data.csv 2026-01-03 16:54:40.741316             500000    FULINS       NaT
+isin            | short_name      | expiry_date     | price_multiplie | underlying_isin
+---------------------------------------------------------------------------------------
+EZHGJ2YVL647    | NA/O Bskt Put E | 2026-01-21      | 1.0             | None           
+EZ8YY5SRNBD4    | NA/O Bskt Put E | 2033-01-12      | 1.0             | None           
+EZFJ5D1TD3F0    | NA/O Bskt Put E | 2025-06-12      | 1.0             | None           
 
 
 ================================================================================
-TABLE: other_instruments
+TABLE: rights_instruments
 ================================================================================
 
-Schema:
+Columns: 22
+
+Column Name                              Type            Nullable  
+---------------------------------------- --------------- ----------
+isin                                     VARCHAR         NO        
+short_name                               VARCHAR         YES       
+expiry_date                              DATE            YES       
+price_multiplier                         DOUBLE          YES       
+underlying_isin                          VARCHAR         YES       
+underlying_index_isin                    VARCHAR         YES       
+underlying_index_name                    VARCHAR         YES       
+underlying_index_term_unit               VARCHAR         YES       
+underlying_index_term_value              VARCHAR         YES       
+underlying_basket_isin                   VARCHAR         YES       
+option_type                              VARCHAR         YES       
+option_exercise_style                    VARCHAR         YES       
+strike_price                             DOUBLE          YES       
+delivery_type                            VARCHAR         YES       
+commodity_base_product                   VARCHAR         YES       
+commodity_sub_product                    VARCHAR         YES       
+commodity_additional_sub_product         VARCHAR         YES       
+fx_type                                  VARCHAR         YES       
+fx_other_notional_currency               VARCHAR         YES       
+trading_venue_id                         VARCHAR         YES       
+first_trade_date                         DATE            YES       
+termination_date                         DATE            YES       
+
+Total Rows: 347,738
+
+Sample Data (first 3 rows):
 --------------------------------------------------------------------------------
-  isin                           VARCHAR         [PRI] NOT NULL
-  short_name                     VARCHAR        
-  trading_venue_id               VARCHAR        
-  first_trade_date               DATE           
-  termination_date               DATE           
-
-Row count: 0
+isin            | short_name      | expiry_date     | price_multiplie | underlying_isin
+---------------------------------------------------------------------------------------
+DE000GV62PP4    | GSACHSBKEUR/SP  | 2025-09-19      | None            | None           
+DE000GV62R78    | GSACHSBKEUR/SP  | 2025-07-18      | None            | None           
+DE000GX37ST8    | GOLDM.S.BK EURO | None            | None            | None           
 
 
 ================================================================================
-STATISTICS SUMMARY
+TABLE: swap_instruments
 ================================================================================
 
-Asset Type Distribution:
+Columns: 19
+
+Column Name                              Type            Nullable  
+---------------------------------------- --------------- ----------
+isin                                     VARCHAR         NO        
+short_name                               VARCHAR         YES       
+expiry_date                              DATE            YES       
+price_multiplier                         DOUBLE          YES       
+underlying_isin                          VARCHAR         YES       
+underlying_lei                           VARCHAR         YES       
+underlying_index_isin                    VARCHAR         YES       
+underlying_index_name                    VARCHAR         YES       
+underlying_index_term_unit               VARCHAR         YES       
+underlying_index_term_value              VARCHAR         YES       
+underlying_basket_isin                   VARCHAR         YES       
+delivery_type                            VARCHAR         YES       
+interest_rate_reference_name             VARCHAR         YES       
+interest_rate_term_unit                  VARCHAR         YES       
+interest_rate_term_value                 VARCHAR         YES       
+fx_other_notional_currency               VARCHAR         YES       
+trading_venue_id                         VARCHAR         YES       
+first_trade_date                         DATE            YES       
+termination_date                         DATE            YES       
+
+Total Rows: 483,523
+
+Sample Data (first 3 rows):
 --------------------------------------------------------------------------------
-instrument_type       asset_name  count  percentage
-              D Debt Instruments 206609       46.16
-              E         Equities 192882       43.10
-              F          Futures  48055       10.74
+isin            | short_name      | expiry_date     | price_multiplie | underlying_isin
+---------------------------------------------------------------------------------------
+EZ9M3KSWPYK2    | NA/Swaps SStk T | 2025-08-26      | 1.0             | AT0000A18XM4   
+EZ9M6RDQVC70    | NA/Swaps SStk T | 2024-02-15      | 1.0             | JP3536150000   
+EZ9M7PWBBX33    | NA/Swaps SStk T | 2024-09-23      | 1.0             | US76171L1061   
+
 
 ================================================================================
-SCHEMA RELATIONSHIPS
+ASSET TYPE STATISTICS
 ================================================================================
 
-Master Table:
-  instruments (ISIN, CFI, type, issuer, name, currency)
+Type   Description                                Count
+------ ----------------------------------- ------------
+C      Collective Investment Vehicles            17,767
+D      Debt Instruments                         206,609
+E      Equities                                 192,882
+F      Futures                                   48,055
+H      Referential Instruments                  498,238
+I      Indices                                        2
+J      Listed Options                            77,538
+O      Options                                  500,000
+R      Rights/Entitlements                      347,738
+S      Swaps                                    483,523
+------ ----------------------------------- ------------
+TOTAL                                         2,372,352
 
-Detail Tables (linked by ISIN):
-  ├── equity_instruments (E)
-  ├── debt_instruments (D)
-  ├── derivative_instruments (F, O, S)
-  └── other_instruments (C, R, H, I, J)
+================================================================================
+TABLE RELATIONSHIPS
+================================================================================
+
+Star Schema:
+  instruments (master table)
+    └─ isin (PRIMARY KEY)
+
+  Asset-Specific Detail Tables (FOREIGN KEY to instruments.isin):
+    ├─ civ_instruments
+    ├─ debt_instruments
+    ├─ equity_instruments
+    ├─ futures_instruments
+    ├─ index_instruments
+    ├─ listed_option_instruments
+    ├─ option_instruments
+    ├─ rights_instruments
+    └─ swap_instruments
+
+  Metadata:
+    └─ metadata (file tracking)
+
+================================================================================
+INDEXES
+================================================================================
+
+  - idx_civ_venue
+  - idx_debt_venue
+  - idx_equity_venue
+  - idx_futures_venue
+  - idx_index_venue
+  - idx_instruments_cfi
+  - idx_instruments_type
+  - idx_listed_option_venue
+  - idx_option_venue
+  - idx_rights_venue
+  - idx_swap_venue

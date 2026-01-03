@@ -8,7 +8,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-#### Vectorized Storage Backend (2026-01-03)
+#### CFI Classification System (2025-01-03)
+- Complete ISO 10962 CFI (Classification of Financial Instruments) implementation
+- Full decoding of all CFI categories: E, D, C, F, O, S, H, R, I, J, K, L, T, M
+- Comprehensive attribute decoders for each category and group
+- CFI dataclass with validation and description methods
+- CFIInstrumentTypeManager for FIRDS/FITRS file mapping
+- Integration into storage layer for automatic classification
+- New methods: classify_instrument(), get_instruments_by_cfi_category()
+- Enhanced search_instruments() with CFI descriptions
+- Example script demonstrating CFI classification (03_cfi_classification.py)
+
+### Changed
+
+#### ISO 10962 Compliance - Asset Type Mapping (2025-01-03)
+- Corrected FIRDS file type mappings to match ISO 10962 CFI standard
+- I type: Renamed from "Indices" to "Spot" (spot contracts and indices)
+- J type: Renamed from "Listed Options" to "Forwards" (forward contracts and warrants)
+- Table names: index_instruments → spot_instruments, listed_option_instruments → forward_instruments
+- Schema functions: create_index_table → create_spot_table, create_listed_option_table → create_forward_table
+- Bulk insert methods: insert_indices → insert_spots, insert_listed_options → insert_forwards
+- Updated documentation and routing logic to align with CFI Category enum
+
+#### Complete Asset Type Support (2025-01-03)
+- Schema support for all 10 FIRDS asset types (C, D, E, F, H, I, J, O, R, S)
+- Dedicated tables: futures_instruments, option_instruments, swap_instruments, forward_instruments, rights_instruments, civ_instruments, spot_instruments
+- Asset-specific field mappings for each instrument type
+- Comprehensive field extraction for derivatives (options, swaps, futures, forwards)
+- Commodity, FX, and interest rate product attributes
+- Schema definitions separated into schema.py module (286 lines)
+- Bulk insert handlers refactored into bulk_inserters.py module (543 lines)
+- Comprehensive testing with 2.37M real FIRDS instruments across all 10 types
+- Complete database schema documentation in database_schema.txt
+
+### Changed
+
+#### Storage Architecture (2025-01-03)
+- Expanded from 5 tables to 11 tables for complete asset type coverage
+- Enhanced debt instruments schema with floating rate fields
+- Enhanced futures schema with commodity product classifications
+- Options schema supports strike price variations (monetary, percentage, basis points)
+- Swaps schema includes interest rate and FX swap attributes
+- Listed options schema for exchange-traded options with commodity attributes
+- Rights/entitlements schema for warrants and subscription rights
+- CIV schema for collective investment vehicles
+- Index schema for commodity and other indices
+- Modular architecture: duckdb_store.py (307 lines) imports schema and bulk_inserters modules
+- Reduced main storage class from 1,139 lines to 307 lines (73% reduction)
+
+#### Vectorized Storage Backend (2025-01-03)
 - DuckDBVectorizedStorage class with star schema architecture
 - Master instruments table with core fields (ISIN, CFI, type, issuer, name, currency)
 - Asset-specific tables: equity_instruments, debt_instruments, derivative_instruments, other_instruments
@@ -27,12 +75,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Performance
 
-#### Benchmark Results (2026-01-03)
-- 48K futures: 1.35s (35,540 inst/sec)
-- 500K debt instruments: 8.48s (58,940 inst/sec)
-- 500K equities: 6.49s (77,016 inst/sec)
-- Total: 447K instruments in 16.33s
-- Projection: 11M records in 3-4 minutes
+#### Benchmark Results (2025-01-03)
+- Tested with all 10 asset types:
+  - C: 127K instruments in 0.89s (142,285 inst/sec)
+  - D: 500K instruments in 8.18s (61,149 inst/sec)
+  - E: 500K instruments in 6.02s (83,100 inst/sec)
+  - F: 48K instruments in 1.53s (31,368 inst/sec)
+  - H: 500K instruments in 13.39s (37,342 inst/sec)
+  - I: 3 instruments in 0.06s (51 inst/sec)
+  - J: 117K instruments in 3.14s (37,353 inst/sec)
+  - O: 500K instruments in 13.02s (38,403 inst/sec)
+  - R: 500K instruments in 11.25s (44,464 inst/sec)
+  - S: 500K instruments in 13.60s (36,752 inst/sec)
+- **Total: 2.37M instruments in 71.08s (33,374 inst/sec)**
+- Database size: 625.8 MB
+- All asset-specific fields correctly extracted and stored
 
 #### Index Manager (2026-01-02)
 - IndexManager class for fast ISIN lookups using lightweight JSON index
