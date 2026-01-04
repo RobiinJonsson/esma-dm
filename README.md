@@ -25,20 +25,19 @@ pip install -e .
 ## Quick Start
 
 ```python
-from esma_dm import FIRDSClient
+import esma_dm as edm
 
-# Initialize client
-firds = FIRDSClient()
+# Simple reference lookup
+instrument = edm.reference('SE0000242455')
+print(instrument['short_name'])  # SWEDBANK/SH A
 
-# Download latest equity files
-data = firds.get_latest_full_files(asset_type='E')
+# Asset type queries
+swap_types = edm.reference.swap.types()
+print(f"Unique swap CFI codes: {len(swap_types)}")
 
-# Index data into DuckDB
-firds.index_cached_files()
-
-# Query reference data
-instrument = firds.reference('US0378331005')
-print(f"Found: {instrument['full_name']}")
+# Asset type statistics
+print(f"Total swaps: {edm.reference.swap.count():,}")
+summary = edm.reference.summary()
 ```
 
 ## Complete Workflow
@@ -69,10 +68,18 @@ print(f"Indexed {results['total_instruments']:,} instruments")
 ### 3. Query Data
 
 ```python
-# Simple lookup
-instrument = firds.reference('SE0000242455')
+# Simple lookup via reference API
+instrument = edm.reference('SE0000242455')
 
-# SQL queries
+# Get CFI classification details
+classification = instrument['cfi_classification']
+
+# Asset type queries
+swap_types = edm.reference.swap.types()  # All swap CFI codes
+equity_count = edm.reference.equity.count()  # Count equities
+samples = edm.reference.forward.sample(10)  # Sample forwards
+
+# Direct SQL queries
 df = firds.data_store.query("""
     SELECT instrument_type, COUNT(*) as count
     FROM instruments
@@ -87,11 +94,33 @@ See `examples/` directory:
 
 - `01_basic_usage.py` - Getting started
 - `02_reference_lookup.py` - Query methods  
-- `03_advanced_queries.py` - Complex SQL queries
+- `03_cfi_classification.py` - CFI classification and decoding
 
 ```bash
 python examples/01_basic_usage.py
 ```
+
+## Reference API
+
+The package provides a convenient hierarchical API for querying instruments:
+
+```python
+import esma_dm as edm
+
+# Direct ISIN lookup (callable interface)
+instrument = edm.reference('EZKLV6Z6S7X8')
+
+# Asset type-specific queries
+swap_types = edm.reference.swap.types()      # All unique swap CFI codes
+equity_count = edm.reference.equity.count()  # Total equity instruments
+samples = edm.reference.forward.sample(10)   # 10 sample forwards
+
+# Global statistics
+summary = edm.reference.summary()            # Summary of all asset types
+all_types = edm.reference.types()            # All CFI codes across types
+```
+
+**Available asset types**: `equity`, `debt`, `civ`, `futures`, `options`, `swap`, `referential`, `rights`, `spot`, `forward`
 
 ## Project Structure
 
@@ -99,16 +128,35 @@ python examples/01_basic_usage.py
 esma-dm/
 ├── esma_dm/
 │   ├── clients/          # FIRDS, FITRS, SSR, Benchmarks
-│   ├── storage/          # DuckDB and JSON backends
-│   ├── models/           # Data models and mappers
+│   ├── storage/          # DuckDB storage with modular architecture
+│   │   ├── schema.py     # Table definitions (11 tables)
+│   │   ├── bulk_inserters.py  # Asset-specific bulk insert handlers
+│   │   └── duckdb_store.py    # Storage orchestration
+│   ├── models/           # Data models and CFI classification
+│   │   └── utils/        # CFI (ISO 10962) implementation
+│   ├── reference_api.py  # Hierarchical reference API
 │   └── utils.py
 └── examples/             # Usage examples
 ```
 
 ## Key Features
 
+### Reference API
+- **Hierarchical access**: `edm.reference.swap.types()` for asset-specific queries
+- **Callable interface**: `edm.reference('ISIN')` for direct lookups
+- **Type discovery**: Get all unique CFI codes per asset type
+- **Statistics**: Count and sample methods for each asset type
+
+### CFI Classification (ISO 10962)
+- Complete implementation of ISO 10962 standard
+- 14 categories: E, D, C, F, O, S, H, R, I, J, K, L, T, M
+- Comprehensive attribute decoders for all categories
+- Category and group descriptions
+- Integrated into reference data queries
+
 ### DuckDB Storage
 - Star schema with master instruments table + 10 asset-specific tables
+- ISO 10962 compliant naming: `spot_instruments` (I), `forward_instruments` (J)
 - Complete support for all FIRDS asset types:
   - C: Collective Investment Vehicles
   - D: Debt Instruments (bonds, notes with interest rate fields)
@@ -123,6 +171,7 @@ esma-dm/
 - Vectorized bulk loading with pandas + DuckDB
 - Foreign key relationships for data integrity
 - 11 indexes for optimized query patterns
+- Modular architecture: separated schema, bulk inserters, orchestration
 
 ### Validation
 - ISIN (ISO 6166)

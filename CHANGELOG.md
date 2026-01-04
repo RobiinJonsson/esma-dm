@@ -8,7 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-#### CFI Classification System (2025-01-03)
+#### Reference API (2026-01-04)
+- Hierarchical reference API for convenient instrument queries
+- Callable interface: `edm.reference('ISIN')` for direct lookups
+- Asset type queries: `edm.reference.swap.types()` for CFI code discovery
+- Statistics methods: `.count()`, `.sample()` per asset type
+- Global methods: `.summary()` and `.types()` across all asset types
+- Integrated CFI descriptions in type queries
+- Support for all 10 asset types: equity, debt, civ, futures, options, swap, referential, rights, spot, forward
+
+#### CFI Classification System (2026-01-03)
 - Complete ISO 10962 CFI (Classification of Financial Instruments) implementation
 - Full decoding of all CFI categories: E, D, C, F, O, S, H, R, I, J, K, L, T, M
 - Comprehensive attribute decoders for each category and group
@@ -21,7 +30,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
-#### ISO 10962 Compliance - Asset Type Mapping (2025-01-03)
+#### Column Mapping Improvements (2026-01-04)
+- Enhanced swap instruments column mappings for better data extraction
+- Added support for `AsstClssSpcfcAttrbts_Intrst_IntrstRate_*` fields
+- Improved trading venue, first trade date, and termination date field detection
+- Added `TradgVnRltdAttrbts_*` column pattern matching
+- Interest rate and underlying index fields now correctly extracted
+
+#### ISO 10962 Compliance - Asset Type Mapping (2026-01-03)
 - Corrected FIRDS file type mappings to match ISO 10962 CFI standard
 - I type: Renamed from "Indices" to "Spot" (spot contracts and indices)
 - J type: Renamed from "Listed Options" to "Forwards" (forward contracts and warrants)
@@ -30,7 +46,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Bulk insert methods: insert_indices → insert_spots, insert_listed_options → insert_forwards
 - Updated documentation and routing logic to align with CFI Category enum
 
-#### Complete Asset Type Support (2025-01-03)
+#### Complete Asset Type Support (2026-01-03)
 - Schema support for all 10 FIRDS asset types (C, D, E, F, H, I, J, O, R, S)
 - Dedicated tables: futures_instruments, option_instruments, swap_instruments, forward_instruments, rights_instruments, civ_instruments, spot_instruments
 - Asset-specific field mappings for each instrument type

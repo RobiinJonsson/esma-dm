@@ -43,8 +43,15 @@ from .clients.fitrs import FITRSClient
 from .clients.benchmarks import BenchmarksClient
 from .clients.ssr import SSRClient
 from .config import Config
+from .reference_api import ReferenceAPI
+
+# Global reference API instance
+reference = ReferenceAPI()
 
 __all__ = [
+    # Convenience functions
+    "reference",
+    
     # Clients
     "FIRDSClient",
     "FITRSClient", 
