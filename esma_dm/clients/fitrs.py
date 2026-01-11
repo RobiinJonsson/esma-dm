@@ -14,11 +14,12 @@ import requests
 
 from ..utils import Utils
 from ..config import default_config
-from ..storage.fitrs_store import FITRSStorage
+from ..storage.fitrs import FITRSStorage
 from ..models.transparency_enums import (
     Methodology, InstrumentClassification, FileType as FITRSFileType,
     format_methodology_info, format_classification_info
 )
+from ..utils.constants import FITRS_SOLR_URL, DVCAP_SOLR_URL
 
 
 class InstrumentType(Enum):
@@ -56,7 +57,7 @@ class FITRSClient:
         >>> my_transparency = fitrs.get_instruments(['GB00B1YW4409'])
     """
     
-    BASE_URL = "https://registers.esma.europa.eu/solr/esma_registers_fitrs_files/select"
+    BASE_URL = FITRS_SOLR_URL
     
     def __init__(
         self,
@@ -294,10 +295,8 @@ class FITRSClient:
             >>> dvcap_data = fitrs.get_dvcap_latest()
         """
         # DVCAP uses its own endpoint
-        dvcap_url = "https://registers.esma.europa.eu/solr/esma_registers_dvcap_files/select"
-        
         query_url = (
-            f"{dvcap_url}?q=*"
+            f"{DVCAP_SOLR_URL}?q=*"
             f"&fq=creation_date:[{self.date_from}T00:00:00Z+TO+{self.date_to}T23:59:59Z]"
             f"&wt=xml&indent=true&start=0&rows={self.limit}"
         )

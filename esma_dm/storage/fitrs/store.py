@@ -11,7 +11,7 @@ import duckdb
 import pandas as pd
 from datetime import datetime
 
-from .fitrs_schema import initialize_fitrs_schema, get_fitrs_schema_info
+from ..schema.fitrs_schema import initialize_fitrs_schema, get_fitrs_schema_info
 
 
 class FITRSStorage:

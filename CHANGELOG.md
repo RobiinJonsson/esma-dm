@@ -6,6 +6,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+#### Architectural Refactoring (2026-01-11)
+- **Created centralized utility modules** for code reusability:
+  - `esma_dm/utils/validators.py`: ISO standard validators (ISIN/ISO 6166, LEI/ISO 17442, CFI/ISO 10962, MIC/ISO 10383)
+  - `esma_dm/utils/constants.py`: ESMA URL constants, file patterns, default settings
+  - `esma_dm/utils/__init__.py`: Unified export interface for all utilities
+- **Enhanced configuration system**:
+  - Added URL constants to Config class (FIRDS_BASE_URL, FITRS_BASE_URL, SSR_BASE_URL, BENCHMARKS_BASE_URL)
+  - Added mode validation in Config.__post_init__()
+  - Added get_database_path() helper method for consistent database path resolution
+  - Added mode parameter with validation against DATABASE_MODES constant
+- **Modularized DuckDB storage backend** (1293→9 lines + 5 modules):
+  - `esma_dm/storage/duckdb/connection.py`: Database connection and initialization (140 lines)
+  - `esma_dm/storage/duckdb/operations.py`: Bulk insert and update operations (285 lines)
+  - `esma_dm/storage/duckdb/queries.py`: Instrument retrieval and search queries (350 lines) 
+  - `esma_dm/storage/duckdb/versioning.py`: Delta processing and version management (250 lines)
+  - `esma_dm/storage/duckdb/__init__.py`: Unified DuckDBStorage interface (130 lines)
+  - `esma_dm/storage/duckdb_store.py`: Compatibility import layer (9 lines)
+  - **Benefits**: Better separation of concerns, easier testing, reduced file complexity
+  - **Backward compatibility**: All existing imports continue to work unchanged
+- **Eliminated code duplication**:
+  - Removed duplicate validator methods from clients/firds.py and firds.py (now delegate to utils.validators)
+  - Removed hardcoded URLs from all clients (FIRDS, FITRS, SSR) - now use constants module
+  - Removed hardcoded DVCAP URL from fitrs.py
+- **Updated imports across codebase**:
+  - All clients now import from esma_dm.utils.constants for URLs
+  - All validators now import from esma_dm.utils.validators
+  - Project config.py now imports from package constants with fallback
+- **Backward compatibility preserved**:
+  - FIRDSClient.validate_isin/lei/cfi() kept as deprecated wrappers (delegate to utils)
+  - All existing public APIs unchanged
+
+### Deprecated
+
+#### Legacy FIRDS Module (2026-01-11)
+- **Deprecated esma_dm/firds.py module** in favor of esma_dm/clients/firds.py:
+  - Added deprecation warnings when importing or instantiating legacy FIRDSClient
+  - Updated docstrings with migration guidance and feature comparison
+  - Legacy module will be removed in next major version (v1.0.0)
+- **Migration path**:
+  - OLD: `from esma_dm.firds import FIRDSClient`
+  - NEW: `from esma_dm.clients.firds import FIRDSClient`
+  - RECOMMENDED: `from esma_dm import FIRDSClient` (imports from clients automatically)
+- **Benefits of new client**:
+  - Mode-based operation (current vs history)
+  - Enhanced caching and performance
+  - Better error handling and validation
+  - Delta file processing capabilities (DLTINS support)
+  - ESMA Section 8.2 compliance for historical tracking
+
 ### Added
 
 #### Mode-Based Operation (2026-01-11)

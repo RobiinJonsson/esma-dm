@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 from ..utils import Utils
 from ..config import default_config
+from ..utils.constants import SSR_SOLR_URL
 
 
 class SSRClient:
@@ -37,7 +38,7 @@ class SSRClient:
     """
     
     BASE_URL = (
-        "https://registers.esma.europa.eu/solr/esma_registers_mifid_shsexs/select?"
+        f"{SSR_SOLR_URL}?"
         "q=({{!parent%20which=%27type_s:parent%27}})&wt=json&indent=true&rows=150000"
         "&fq=(shs_countryCode:{country})"
     )

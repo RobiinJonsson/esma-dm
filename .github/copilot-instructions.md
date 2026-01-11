@@ -1,7 +1,59 @@
 # GitHub Copilot Instructions for esma-dm
 
 ## Project Overview
-Python package for accessing ESMA (European Securities and Markets Authority) published data including FIRDS, FITRS, SSR, and Benchmarks.
+Python package for accessing ESMA (European Securities and Markets Authority) published data including FIRDS, FITRS, SSR, and Benchmarks. The package downloads XML files from ESMA registers, parses them into normalized models, and provides both DuckDB storage with SQL queries and direct Python API access.
+
+## Architecture Overview
+
+### Three-Layer Design
+1. **Client Layer** (`esma_dm/clients/`): Download and parse ESMA XML/CSV files
+   - `FIRDSClient`: Reference data (2.3M+ instruments, 10 asset types C,D,E,F,H,I,J,O,R,S)
+   - `FITRSClient`: Transparency/liquidity metrics
+   - `BenchmarksClient`, `SSRClient`: Other ESMA datasets
+
+2. **Storage Layer** (`esma_dm/storage/`): DuckDB star schema with vectorized bulk loading
+   - `DuckDBStorage`: Master orchestrator, mode-based database selection
+   - `schema.py`: 13 tables (1 master instruments, 10 asset-specific, 1 listings, 1 cancellations)
+   - `bulk_inserters.py`: Asset-type-grouped batch inserts (33,000+ instruments/second)
+   - Separate databases: `firds_current.duckdb` (9 columns, latest only) vs `firds_history.duckdb` (17 columns, full versioning)
+
+3. **API Layer** (`esma_dm/`): Pythonic access patterns
+   - `reference_api.py`: `edm.reference('ISIN')` and `edm.reference.swap.types()`
+   - `transparency_api.py`: `edm.transparency('ISIN')` for FITRS data
+   - Cross-database joins via DuckDB ATTACH
+
+### Mode-Based Operation
+Critical design decision (see CHANGELOG 2026-01-11): FIRDSClient has two operational modes that use different databases and schemas:
+
+```python
+# Current mode (default): Latest snapshots only, 9 columns, fast queries
+firds = FIRDSClient(mode='current')  # → firds_current.duckdb
+
+# History mode: Full ESMA Section 8.2 compliance, 17 columns, version tracking
+firds = FIRDSClient(mode='history')  # → firds_history.duckdb
+firds.process_delta_files()  # Only available in history mode
+```
+
+**When to use each mode:**
+- Current: Production queries on latest data, storage efficiency priority
+- History: Regulatory compliance, audit trails, point-in-time queries
+
+### Data Flow
+1. **Download**: `get_latest_full_files(asset_type='E')` → CSV in `downloads/data/firds/`
+2. **Parse**: `InstrumentMapper` → Asset-specific model (EquityInstrument, DebtInstrument, etc.)
+3. **Vectorize**: `BulkInserter.prepare_vectors()` → NumPy arrays grouped by asset type
+4. **Bulk Insert**: `BulkInserter.insert_batch()` → Single transaction per asset type
+5. **Query**: SQL or API (`edm.reference('ISIN')`)
+
+### CFI-Driven Model Selection
+CFI code first character determines model class:
+```python
+# E → EquityInstrument, D → DebtInstrument, S → SwapInstrument, etc.
+from esma_dm.models.mapper import InstrumentMapper
+instrument = InstrumentMapper.map_to_instrument(row_data)  # Auto-selects class
+```
+
+See `esma_dm/models/utils/cfi.py` for full ISO 10962 decoding (6-char CFI → human descriptions).
 
 ## Code Style Rules
 
@@ -20,30 +72,21 @@ Python package for accessing ESMA (European Securities and Markets Authority) pu
 ### Python Code
 - Follow PEP 8 style guidelines
 - Use type hints for all function parameters and return values
-- Use dataclasses for structured data
-- Use Enums for fixed sets of values
+- Use dataclasses for structured data (see `esma_dm/models/`)
+- Use Enums for fixed sets of values (AssetType, FileType, OptionType, etc.)
+- **Use centralized utilities**: Import validators from `esma_dm.utils.validators`, constants from `esma_dm.utils.constants`
 - Validate inputs using proper validation methods
 - Keep methods focused and single-purpose
-
-### Architecture
-- Modular design with separate clients for each ESMA dataset
-- Shared utilities in utils.py
-- Configuration management via Config class
-- Caching enabled by default for performance
-- Error handling with informative messages
+- **No hardcoded URLs**: Use constants from `esma_dm.utils.constants`
+- **No duplicate code**: Extract common patterns to utility modules
 
 ### Data Standards
 - Follow ISO standards: ISO 6166 (ISIN), ISO 17442 (LEI), ISO 10962 (CFI)
 - Follow RTS 23 specifications for FIRDS data
+- Follow ESMA65-8-5014 Section 8 for historical tracking (history mode only)
 - Use pandas DataFrames for tabular data
 - Parse dates to datetime objects
 - Normalize data to typed models where appropriate
-
-### Testing
-- Write unit tests for all new functionality
-- Test validation methods thoroughly
-- Include example usage in tests
-- Ensure backward compatibility
 
 ### Naming Conventions
 - Classes: PascalCase (e.g., FIRDSClient)
@@ -59,84 +102,248 @@ Python package for accessing ESMA (European Securities and Markets Authority) pu
 
 ### Error Handling
 - Raise exceptions for invalid inputs
-- Log errors with appropriate level
+- Log errors with appropriate level (use logging module)
 - Provide helpful error messages
 - Clean up resources in finally blocks
 
-## Project-Specific Rules
+## Critical Development Workflows
 
-### FIRDS Client
-- Support both FULINS (full) and DLTINS (delta) files
-- Validate ISIN, LEI, CFI codes before processing
-- Use AssetType enum for type safety
-- Filter files by asset_type and file_type parameters
+### Initial Setup
+```bash
+# 1. Install in editable mode (use project's venv: esma-venv)
+pip install -e .
 
-### FITRS Client
-- Support multiple instrument types
-- Handle DVCAP data separately
-- Provide transparency metrics
+# 2. Initialize database (run from examples/ or tests/)
+python examples/00_initialize_database.py
+# OR in code:
+from esma_dm import FIRDSClient  # Use recommended import (from clients)
+firds = FIRDSClient(mode='current')
+firds.data_store.initialize()
 
-### Data Models
-- Use dataclasses with type hints
-- Include get_schema() methods for introspection
-- Map CFI codes to appropriate model classes
-- Handle optional fields with Optional[T]
-
-### Validation
-- Implement static validation methods on client classes
-- Validate format and structure, not business logic
-- Return bool for validation methods
-- Document expected formats in docstrings
-
-### Performance
-- Cache downloaded files in project downloads folder
-- Use date-based filtering to reduce API calls
-- Parse XML efficiently with lxml
-- Batch operations where possible
-
-## Examples to Follow
-
-### Good Method Signature
-```python
-def get_file_list(
-    self,
-    file_type: Optional[str] = None,
-    asset_type: Optional[str] = None
-) -> pd.DataFrame:
-    \"\"\"
-    Retrieve list of available FIRDS files.
-    
-    Args:
-        file_type: Filter by file type (FULINS or DLTINS)
-        asset_type: Filter by asset type (C, D, E, F, H, I, J, O, R, S)
-    
-    Returns:
-        DataFrame containing file metadata
-    
-    Example:
-        >>> firds = FIRDSClient()
-        >>> files = firds.get_file_list(file_type='FULINS', asset_type='E')
-    \"\"\"
+# 3. Download and index latest data
+firds.get_latest_full_files(asset_type='E')  # Uses cache by default
+firds.index_cached_files()  # Bulk load to DuckDB
 ```
 
-### Good Enum Definition
+### Migration from Legacy Module
+**DEPRECATED**: `esma_dm.firds` module is deprecated. Use `esma_dm.clients.firds` instead.
+
 ```python
-class AssetType(Enum):
-    \"\"\"CFI first character representing asset types (ISO 10962).\"\"\"
-    EQUITY = "E"  # Equities (shares, units)
-    DEBT = "D"    # Debt instruments (bonds, notes)
+# ❌ OLD (deprecated, shows warnings)
+from esma_dm.firds import FIRDSClient
+
+# ✅ NEW (recommended)
+from esma_dm import FIRDSClient  # Imports from clients automatically
+
+# ✅ EXPLICIT 
+from esma_dm.clients.firds import FIRDSClient
 ```
 
-### Good Dataclass
+**Migration benefits**: Mode-based operation, enhanced caching, delta processing, better error handling.
+
+### Testing
+- Use pytest: `pytest tests/` (tests use pytest fixtures and assertions)
+- Mock external API calls with `unittest.mock.patch`
+- See `tests/test_delta_processing.py` for version management tests
+- See `tests/test_firds.py` for validation tests
+
+### Database Management
 ```python
-@dataclass
-class FIRDSFile:
-    \"\"\"Metadata for a FIRDS file.\"\"\"
-    file_name: str
-    file_type: str
-    publication_date: str
-    download_link: str
-    asset_type: Optional[str] = None
+# Drop database (requires confirmation)
+firds.data_store.drop(confirm=True)
+
+# Query statistics
+stats = firds.get_store_stats()  # Returns instrument counts by type
+
+# Direct SQL (for complex queries)
+result = firds.data_store.con.execute("SELECT * FROM instruments WHERE cfi_code LIKE 'E%'").fetchdf()
+```
+
+### Delta File Processing (History Mode Only)
+```python
+firds = FIRDSClient(mode='history')
+firds.data_store.initialize(mode='history')
+
+# Initial full load
+firds.get_latest_full_files(asset_type='E')
+firds.index_cached_files()
+
+# Process daily deltas (NEW, MODIFIED, TERMINATED, CANCELLED records)
+stats = firds.process_delta_files(
+    asset_type='E',
+    date_from='2026-01-04',
+    date_to='2026-01-11'
+)
+```
+
+Record types follow ESMA Section 8.2:
+- `NEW`: Insert new instrument (increments version_number if ISIN exists)
+- `MODIFIED`: Close previous version (set valid_to_date), insert new version
+- `TERMINATED`: Archive and mark as terminated
+- `CANCELLED`: Move to cancellations table
+
+## Project-Specific Patterns
+
+### Asset Type Filtering
+All methods support 10 asset types (CFI first character):
+```python
+# Download equities only
+firds.get_latest_full_files(asset_type='E')
+
+# Query methods filter by asset_type
+edm.reference.equity.count()  # E instruments
+edm.reference.swap.types()    # S instruments with CFI descriptions
+```
+
+### Caching Strategy
+Default behavior (added 2026-01-11): Use cached files for fast iteration
+```python
+# Uses cache (fast, good for development)
+firds.get_latest_full_files(asset_type='E')
+
+# Force fresh download (explicit when needed)
+firds.get_latest_full_files(asset_type='E', update=True)
+```
+
+### Model Mapping Pattern
+InstrumentMapper uses field name normalization:
+```python
+# Handles both RefData_FinInstrmGnlAttrbts_Id and FinInstrmGnlAttrbts_Id
+# Maps raw XML columns → model attributes via COMMON_FIELD_MAP, DEBT_FIELD_MAP, etc.
+# See esma_dm/models/mapper.py lines 20-90 for full mappings
+```
+
+### Validation Methods
+Implement as static methods on client classes:
+```python
+@staticmethod
+def validate_isin(isin: str) -> bool:
+    """Validate ISIN format (ISO 6166)."""
+    if not isinstance(isin, str) or len(isin) != 12:
+        return False
+    # ... check structure
+    return True
+```
+
+### API Design Pattern
+Two-tier API: functional shorthand + class-based queries
+```python
+# Shorthand for single ISIN lookup
+import esma_dm as edm
+instrument = edm.reference('SE0000242455')
+
+# Class-based for complex queries
+result = edm.reference.swap.types()  # Returns DataFrame with CFI descriptions
+count = edm.reference.equity.count()
+```
+
+## Common Pitfalls
+
+### Mode Confusion
+- Don't call `process_delta_files()` in current mode (raises error)
+- Don't query historical fields (version_number, valid_from_date) in current mode (columns don't exist)
+- Always specify mode explicitly if using history features
+
+### File Path Handling
+- Use `self.config.downloads_path` not hardcoded paths
+- Files are cached in `downloads/data/firds/` (FIRDS) or `downloads/data/fitrs/` (FITRS)
+- Database files are in same directories as data
+
+### CFI Code Dependencies
+- Always use `CFI` class from `esma_dm/models/utils/cfi.py` for CFI decoding
+- CFI first character determines table routing (equity, debt, swap, etc.)
+- Invalid CFI codes should log warnings but not crash bulk loading
+
+### Bulk Insert Performance
+- Group instruments by asset type BEFORE calling inserter
+- Use single transaction per asset type (see `bulk_inserters.py` pattern)
+- Don't insert one-by-one in loops (30x slower than vectorized approach)
+
+## Testing Commands
+```bash
+# Run all tests
+pytest tests/
+
+# Run specific test file
+pytest tests/test_delta_processing.py -v
+
+# Run with coverage
+pytest --cov=esma_dm tests/
+
+# Example scripts validate core workflows
+python examples/02_index_with_filters.py
+python examples/03_cfi_classification.py
+```
+
+## Key Files Reference
+- `esma_dm/clients/firds.py`: Main client, 1116 lines, all download/parse logic
+- `esma_dm/storage/duckdb_store.py`: Storage orchestrator, mode selection, bulk operations
+- `esma_dm/storage/schema.py`: 13 table definitions, index creation
+- `esma_dm/storage/bulk_inserters.py`: Vectorized insert logic per asset type
+- `esma_dm/models/mapper.py`: Field mapping, model selection
+- `esma_dm/models/utils/cfi.py`: ISO 10962 CFI decoding
+- `esma_dm/utils/validators.py`: ISO standard validators (ISIN, LEI, CFI, MIC)
+- `esma_dm/utils/constants.py`: ESMA URLs, file patterns, defaults
+- `examples/02_index_with_filters.py`: Core workflow demonstration
+
+## Utility Modules
+
+### Validators (`esma_dm/utils/validators.py`)
+ISO standard validation for financial identifiers:
+```python
+from esma_dm.utils import validate_isin, validate_lei, validate_cfi, validate_mic
+
+# Validate ISIN (ISO 6166)
+if validate_isin('US0378331005'):
+    print("Valid ISIN")
+
+# Validate LEI (ISO 17442)
+if validate_lei('549300VALTPVHYSYMH70'):
+    print("Valid LEI")
+
+# Validate CFI (ISO 10962)
+if validate_cfi('ESVUFR'):
+    print("Valid CFI")
+
+# Multi-type validation
+is_valid, error = validate_instrument_identifier('US0378331005', 'ISIN')
+```
+
+### Constants (`esma_dm/utils/constants.py`)
+Centralized ESMA register URLs and configuration values:
+```python
+from esma_dm.utils.constants import (
+    FIRDS_SOLR_URL,        # FIRDS endpoint
+    FITRS_SOLR_URL,        # FITRS endpoint
+    DVCAP_SOLR_URL,        # DVCAP endpoint
+    SSR_SOLR_URL,          # SSR endpoint
+    ASSET_TYPE_CODES,      # CFI asset type mapping
+    DATABASE_MODES,        # Valid mode values
+    FILE_TYPE_PATTERNS     # Filename patterns
+)
+
+# Use in clients
+class MyClient:
+    BASE_URL = FIRDS_SOLR_URL  # Instead of hardcoded URL
+```
+
+### Configuration (`esma_dm/config.py`)
+Enhanced with utility integration:
+```python
+from esma_dm.config import Config
+
+config = Config(mode='current')
+
+# Mode validation (raises ValueError if invalid)
+config.mode  # Must be 'current' or 'history'
+
+# Database path helper
+db_path = config.get_database_path('firds', 'current')
+# Returns: downloads/data/firds/firds_current.duckdb
+
+# ESMA URL access
+config.FIRDS_BASE_URL  # From constants module
+config.FITRS_BASE_URL
 ```
 
 ## What to Avoid
@@ -148,3 +355,6 @@ class FIRDSFile:
 - Methods that do too many things
 - Magic numbers without constants
 - Unclear variable names
+- Sequential inserts instead of bulk operations
+- Mixing current/history mode operations
+- **Using deprecated esma_dm.firds module** (use esma_dm.clients.firds or esma_dm import)
