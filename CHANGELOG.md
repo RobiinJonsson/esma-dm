@@ -8,6 +8,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+#### Mode-Based Operation (2026-01-11)
+- Added mode parameter to FIRDSClient and DuckDBStorage:
+  - `mode='current'` (default): Latest FULINS snapshots, optimized for current data queries
+  - `mode='history'`: Full version tracking with DLTINS delta processing
+- Separate databases prevent interference:
+  - Current mode: firds_current.duckdb (9 core columns, no historical tracking)
+  - History mode: firds_history.duckdb (17 columns with version management)
+- Mode-specific features:
+  - Current mode: Simple snapshot workflow with minimal overhead
+  - History mode: ESMA Section 8.2 compliance with version_number, valid_from/to dates, latest_record_flag
+  - process_delta_files() restricted to history mode only
+- Default caching enabled for development:
+  - All download methods default to update=False (use cached files)
+  - Significantly faster iteration during development
+  - Set update=True explicitly when fresh data needed
+
+#### FIRDS Historical Database Support (2026-01-11)
+- Complete implementation of ESMA65-8-5014 Section 8 historical tracking requirements:
+  - Added temporal fields to instruments table: valid_from_date, valid_to_date, latest_record_flag, record_type, version_number
+  - Added source tracking: source_file_type, last_update_timestamp, inconsistency_indicator
+  - Created cancellations table for FULCAN file support (8 fields + 2 indexes)
+  - Created instrument_history table for full version tracking (12 fields + 4 indexes with UNIQUE(isin, version_number))
+  - Added version_number field to all 9 asset-specific tables (equity, debt, futures, options, swaps, forwards, rights, civ, spot)
+  - Added 6 temporal indexes: idx_instruments_latest (filtered), idx_instruments_valid_from, idx_instruments_valid_to, idx_instruments_record_type, idx_cancellations_isin, idx_cancellations_date
+- Temporal query methods per ESMA Section 9:
+  - get_latest_instruments(): Query current versions with latest_record_flag=TRUE
+  - get_instruments_active_on_date(): Query instruments trading on specific date
+  - get_instrument_state_on_date(): Retrieve historical instrument state on any date
+  - get_instrument_version_history(): Full version history for an ISIN
+  - get_modified_instruments_since(): Track changes from specific date
+  - get_cancelled_instruments(): Query FULCAN cancellations
+- Delta file processing (Phase 2):
+  - XML parsing extracts record type wrappers: <NewRcrd>, <ModfdRcrd>, <TermntdRcrd>, <CancRcrd>
+  - process_delta_record() implements ESMA Section 8.2 version management:
+    * NEW: Insert new version (handle late records)
+    * MODIFIED: Close previous version, insert new (valid_to_date = new valid_from - 1 day)
+    * TERMINATED: Archive and mark as terminated
+    * CANCELLED: Move to cancellations table
+  - Automatic version numbering and valid_from_date/valid_to_date management
+  - History archival before updates
+- Schema supports delta record types: NEW, MODIFIED, TERMINATED, CANCELLED
+- Database now maintains full audit trail per ESMA regulatory guidance
+
 #### Full MiFIR Transparency Support (2026-01-11)
 - Complete ESMA65-8-5240 transparency requirements implementation
 - Extended transparency table schema with 15+ MiFIR-compliant fields:

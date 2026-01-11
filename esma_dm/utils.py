@@ -159,9 +159,22 @@ class Utils:
         return mini_tags
     
     @staticmethod
-    def process_tags_firds(child: ET.Element) -> dict:
-        """Process XML tags by building complete paths for FIRDS data."""
+    def process_tags_firds(child: ET.Element, record_type: Optional[str] = None) -> dict:
+        """
+        Process XML tags by building complete paths for FIRDS data.
+        
+        Args:
+            child: XML element to process
+            record_type: Delta record type (NEW, MODIFIED, TERMINATED, CANCELLED) if applicable
+        
+        Returns:
+            Dictionary of parsed tags
+        """
         mini_tags = defaultdict(list)
+        
+        # Store record type if provided (from delta file)
+        if record_type:
+            mini_tags["_record_type"].append(record_type)
         
         def process_element(elem, current_path=[]):
             """Recursively process elements and build path."""
@@ -278,32 +291,67 @@ class Utils:
     
     @staticmethod
     def _parse_firds_xml(root: ET.Element, logger: logging.Logger, element_name: str = "RefData") -> pd.DataFrame:
-        """Parse FIRDS XML format (both FULINS and DLTINS)."""
+        """
+        Parse FIRDS XML format (both FULINS and DLTINS).
+        
+        For DLTINS files, extracts record type from XML wrapper tags:
+        - NewRcrd: New instrument
+        - ModfdRcrd: Modified instrument
+        - TermntdRcrd: Terminated instrument
+        - CancRcrd: Cancelled instrument
+        """
         Utils.clean_inner_tags_firds(root)
         
         # For DLTINS files, we need to find FinInstrm elements within FinInstrmRptgRefDataDltaRpt
         # For FULINS files, we find multiple RefData elements
         if element_name == "FinInstrmRptgRefDataDltaRpt":
-            # DLTINS format: Find the single report element, then get all FinInstrm children
+            # DLTINS format: Find the single report element, then get all record type wrappers
             report_element = root.find(f".//{element_name}")
             if report_element is None:
-                raise Exception(f"No {element_name} element found")
+                # Try without namespace
+                report_element = root
+                logger.info(f"Using root element directly for DLTINS parsing")
             
-            # Get all FinInstrm children
-            root_list = list(report_element.iter("FinInstrm"))
+            # Extract records with their type wrappers
+            root_list = []
+            record_type_map = {
+                "NewRcrd": "NEW",
+                "ModfdRcrd": "MODIFIED",
+                "TermntdRcrd": "TERMINATED",
+                "CancRcrd": "CANCELLED"
+            }
+            
+            for record_type_tag, record_type_value in record_type_map.items():
+                for record_wrapper in report_element.iter(record_type_tag):
+                    # Find FinInstrm element within this wrapper
+                    fin_instrm = record_wrapper.find(".//FinInstrm")
+                    if fin_instrm is not None:
+                        root_list.append((fin_instrm, record_type_value))
+                    else:
+                        # FinInstrm might be direct child
+                        if len(list(record_wrapper)) > 0:
+                            # Use first child as FinInstrm
+                            root_list.append((record_wrapper, record_type_value))
+            
+            if not root_list:
+                logger.warning(f"No records found with explicit wrappers, trying direct children")
+                # Fallback: try to find all FinInstrm elements directly
+                for fin_instrm in report_element.iter("FinInstrm"):
+                    root_list.append((fin_instrm, "NEW"))  # Default to NEW if no wrapper
+            
             if not root_list:
                 raise Exception("No FinInstrm elements found in DLTINS file")
         else:
-            # FULINS format: Find all RefData elements directly
-            root_list = list(root.iter(element_name))
+            # FULINS format: Find all RefData elements directly (no record type)
+            root_list = [(elem, None) for elem in root.iter(element_name)]
             if not root_list:
                 raise Exception(f"No {element_name} elements found")
         
         logger.info(f"Found {len(root_list)} records to process")
         
         list_dicts = []
-        for child in tqdm(root_list, desc="Parsing FIRDS file", position=0, leave=True):
-            list_dicts.append(Utils.process_tags_firds(child))
+        for child, record_type in tqdm(root_list, desc="Parsing FIRDS file", position=0, leave=True):
+            list_dicts.append(Utils.process_tags_firds(child, record_type))
         
         df = pd.DataFrame.from_records(list_dicts)
         

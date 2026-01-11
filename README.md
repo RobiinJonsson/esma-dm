@@ -32,11 +32,11 @@ pip install -e .
 ```python
 import esma_dm as edm
 
-# 1. Initialize database
-firds = edm.FIRDSClient()
-firds.data_store.initialize(mode='current')
+# 1. Initialize database (choose mode)
+firds = edm.FIRDSClient(mode='current')  # or mode='history'
+firds.data_store.initialize()
 
-# 2. Download latest files (optional, if not already cached)
+# 2. Download latest files (uses cached by default)
 firds.get_latest_full_files(asset_type='E')  # Equities
 
 # 3. Load database from CSV files
@@ -56,6 +56,63 @@ print(f"Total swaps: {edm.reference.swap.count():,}")
 summary = edm.reference.summary()
 ```
 
+## Operation Modes
+
+### Current Mode (Default)
+
+Optimized for querying latest instrument data with minimal storage overhead:
+
+```python
+firds = edm.FIRDSClient(mode='current')  # Uses firds_current.duckdb
+firds.data_store.initialize()
+
+# Download uses cached files by default (fast during development)
+firds.get_latest_full_files(asset_type='E')  # Uses cached
+firds.get_latest_full_files(asset_type='E', update=True)  # Force fresh download
+
+# Simple workflow: latest snapshots only
+results = firds.index_cached_files()
+```
+
+**Use current mode when:**
+- You only need latest instrument reference data
+- Storage efficiency is important (9 core columns vs 17)
+- Queries focus on current active instruments
+
+### History Mode
+
+Full ESMA Section 8.2 compliance with version tracking and delta processing:
+
+```python
+firds = edm.FIRDSClient(mode='history')  # Uses firds_history.duckdb
+firds.data_store.initialize()
+
+# Initial load with FULINS files
+firds.get_latest_full_files(asset_type='E')
+firds.index_cached_files()
+
+# Process daily DLTINS delta files
+stats = firds.process_delta_files(
+    asset_type='E',
+    date_from='2026-01-04',
+    date_to='2026-01-11'
+)
+
+print(f"Processed {stats['records_processed']} delta records")
+print(f"NEW: {stats['new']}, MODIFIED: {stats['modified']}")
+print(f"TERMINATED: {stats['terminated']}, CANCELLED: {stats['cancelled']}")
+
+# Query historical states
+history = firds.data_store.get_instrument_version_history('GB00B1YW4409')
+active_on_date = firds.data_store.get_instruments_active_on_date('2025-12-31')
+```
+
+**Use history mode when:**
+- You need full version tracking and audit trails
+- Processing DLTINS delta files for regulatory compliance
+- Temporal queries required (point-in-time instrument state)
+- Maintaining complete lifecycle history per ESMA guidance
+
 ## Complete Workflow
 
 ### 1. Installation
@@ -73,28 +130,37 @@ Initialize the database before loading any data. This creates the schema and ver
 ```python
 from esma_dm import FIRDSClient
 
-firds = FIRDSClient()
+# Choose mode: 'current' for snapshots or 'history' for version tracking
+firds = FIRDSClient(mode='current')  # Default mode
 
 # Initialize database (creates schema and verifies structure)
-result = firds.data_store.initialize(mode='current')
+result = firds.data_store.initialize()
 print(f"Status: {result['status']}")
+print(f"Database: {firds.data_store.db_path}")
 print(f"Tables created: {result['tables_created']}")
 
 # If database already exists, it will verify schema without reinitializing
 # To force recreation, drop first:
-# firds.data_store.drop()
-# firds.data_store.initialize(mode='current')
+# firds.data_store.drop(confirm=True)
+# firds.data_store.initialize()
 ```
+
+**Mode selection:**
+- `mode='current'`: firds_current.duckdb - Latest snapshots only
+- `mode='history'`: firds_history.duckdb - Full version tracking
 
 ### 3. Download Data
 
-Download FIRDS files from ESMA registry:
+Download FIRDS files from ESMA registry. Methods use cached files by default for faster development:
 
 ```python
-# Download latest files for specific asset types
-firds.get_latest_full_files(asset_type='E')  # Equities
-firds.get_latest_full_files(asset_type='D')  # Debt
-firds.get_latest_full_files(asset_type='S')  # Swaps
+# Download latest files for specific asset types (uses cache by default)
+firds.get_latest_full_files(asset_type='E')  # Equities from cache
+firds.get_latest_full_files(asset_type='D')  # Debt from cache
+firds.get_latest_full_files(asset_type='S')  # Swaps from cache
+
+# Force fresh download when needed
+firds.get_latest_full_files(asset_type='E', update=True)
 
 # Or download all asset types
 for asset_type in ['C', 'D', 'E', 'F', 'H', 'I', 'J', 'O', 'R', 'S']:
@@ -185,11 +251,11 @@ Complete workflow to drop and rebuild with fresh data:
 firds.data_store.drop(confirm=True)
 
 # 2. Reinitialize schema
-firds.data_store.initialize(mode='current')
+firds.data_store.initialize()
 
-# 3. Download latest data
+# 3. Download latest data (force fresh download)
 for asset_type in ['E', 'D', 'S']:  # Example: equities, debt, swaps
-    firds.get_latest_full_files(asset_type=asset_type)
+    firds.get_latest_full_files(asset_type=asset_type, update=True)
 
 # 4. Reload database
 results = firds.index_cached_files()
@@ -207,6 +273,62 @@ result = firds.data_store.update(asset_type='E')
 # Full rebuild (all asset types)
 result = firds.data_store.update()
 ```
+
+## Historical Database (ESMA Section 8 Compliance)
+
+The database maintains complete version history per ESMA65-8-5014 Section 8 requirements:
+
+### Temporal Tracking
+
+Every instrument record includes:
+- `valid_from_date`: When this version became effective
+- `valid_to_date`: When this version was superseded (NULL for latest)
+- `latest_record_flag`: TRUE for current version
+- `record_type`: NEW, MODIFIED, TERMINATED, CANCELLED
+- `version_number`: Sequential version identifier
+- `source_file_type`: FULINS (full), DLTINS (delta), or FULCAN (cancellation)
+
+### Query Historical State
+
+```python
+# Get current/latest versions only
+current = firds.data_store.get_latest_instruments(limit=1000)
+
+# Get instruments active on a specific date
+active = firds.data_store.get_instruments_active_on_date('2024-06-15')
+
+# Get instrument state as it was on a specific date
+historical = firds.data_store.get_instrument_state_on_date('GB00B1YW4409', '2023-06-15')
+
+# Get complete version history for an ISIN
+versions = firds.data_store.get_instrument_version_history('GB00B1YW4409')
+print(f"Versions: {len(versions)}")
+
+# Track modifications since a date
+modified = firds.data_store.get_modified_instruments_since('2025-01-01')
+
+# Query cancelled instruments (FULCAN files)
+cancelled = firds.data_store.get_cancelled_instruments(since_date='2024-01-01')
+```
+
+### Version History Table
+
+The `instrument_history` table stores all versions with:
+- Full instrument attributes in JSON format
+- Temporal validity dates
+- Record type from delta XML (<NewRcrd>, <ModfdRcrd>, <TermntdRcrd>, <CancRcrd>)
+- Source file tracking
+- Unique constraint on (isin, version_number)
+
+### Cancellations Tracking
+
+FULCAN files are processed into the `cancellations` table:
+- Original ISIN and trading venue
+- Cancellation date and reason
+- Original publication date reference
+- Full audit trail
+
+This enables regulatory compliance for historical queries and audit trails per ESMA guidance.
 
 ## Examples
 

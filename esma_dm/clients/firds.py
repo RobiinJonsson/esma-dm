@@ -166,7 +166,8 @@ class FIRDSClient:
         limit: int = 10000,
         config: Optional[Any] = None,
         storage_backend: str = 'duckdb',
-        db_path: Optional[str] = None
+        db_path: Optional[str] = None,
+        mode: str = 'current'
     ):
         """
         Initialize FIRDS client.
@@ -178,6 +179,7 @@ class FIRDSClient:
             config: Optional custom configuration object
             storage_backend: Storage backend to use ('json' or 'duckdb', default: 'duckdb')
             db_path: Path to database file (for duckdb) or cloud connection string
+            mode: Data mode - 'current' for latest FULINS snapshots or 'history' for version tracking with DLTINS
         """
         self.date_from = date_from
         self.date_to = date_to or datetime.today().strftime("%Y-%m-%d")
@@ -185,6 +187,10 @@ class FIRDSClient:
         self.config = config or default_config
         self.storage_backend = 'duckdb'  # DuckDB is primary backend
         self.db_path = db_path
+        self.mode = mode
+        
+        if mode not in ['current', 'history']:
+            raise ValueError(f"Invalid mode '{mode}'. Must be 'current' or 'history'")
         
         self.logger = Utils.set_logger("FIRDSClient")
         self._utils = Utils()
@@ -196,9 +202,17 @@ class FIRDSClient:
         if self._data_store is None:
             cache_dir = self.config.downloads_path / 'firds'
             cache_dir.mkdir(parents=True, exist_ok=True)
-            self._data_store = DuckDBStorage(cache_dir, db_path=self.db_path)
+            self._data_store = DuckDBStorage(cache_dir, db_path=self.db_path, mode=self.mode)
         
         return self._data_store
+    
+    def _find_column(self, df: pd.DataFrame, patterns: List[str]) -> Optional[str]:
+        """Find column in DataFrame matching any of the patterns."""
+        for pattern in patterns:
+            matches = [col for col in df.columns if pattern in col]
+            if matches:
+                return matches[0]
+        return None
     
     def get_file_list(
         self,
@@ -292,7 +306,7 @@ class FIRDSClient:
         Args:
             asset_type: CFI first character (C, D, E, F, H, I, J, O, R, S)
             isin_filter: Optional list of ISINs to filter results
-            update: Force re-download of files
+            update: Force re-download of files (default: False, use cached data)
         
         Returns:
             DataFrame containing instrument reference data
@@ -318,7 +332,13 @@ class FIRDSClient:
         
         # Get file list with filters
         files = self.get_file_list(file_type='FULINS', asset_type=asset_type)
-        files = files[files['file_type'] == 'Full']
+        
+        # Filter by file_type column if it exists and has values
+        if not files.empty and 'file_type' in files.columns:
+            full_files = files[files['file_type'].str.contains('Full', case=False, na=False)]
+            # If file_type filtering removes all results, keep original (filename filtering is enough)
+            if not full_files.empty:
+                files = full_files
         
         if files.empty:
             self.logger.warning(f"No FULINS files found for asset type {asset_type}")
@@ -451,7 +471,7 @@ class FIRDSClient:
             asset_type: CFI first character (C, D, E, F, H, I, J, O, R, S)
             date_from: Start date (defaults to instance date_from)
             date_to: End date (defaults to instance date_to)
-            update: Force re-download of files
+            update: Force re-download of files (default: False, use cached data)
         
         Returns:
             DataFrame containing instrument changes
@@ -483,24 +503,32 @@ class FIRDSClient:
                 valid_types = [t.value for t in AssetType]
                 raise ValueError(f"Invalid asset_type '{asset_type}'. Must be one of: {valid_types}")
             
-            # Get file list with filters
-            files = self.get_file_list(file_type='DLTINS', asset_type=asset_type)
-            files = files[files['file_type'] == 'Delta']
+            # Get file list WITHOUT asset_type filter (DLTINS files don't have asset type in filename)
+            # DLTINS files are like: DLTINS_20260101_01of01.zip (contain all asset types)
+            files = self.get_file_list(file_type='DLTINS', asset_type=None)
             
             if files.empty:
-                self.logger.warning(f"No DLTINS files found for asset type {asset_type}")
+                self.logger.warning(f"No DLTINS files found")
                 return pd.DataFrame()
             
-            self.logger.info(f"Found {len(files)} delta files for asset type {asset_type}")
+            self.logger.info(f"Found {len(files)} delta files")
             
-            # Download and parse files
+            # Download and parse files, then filter by asset type
             dfs = []
             for url in files['download_link'].unique():
                 self.logger.info(f"Downloading and parsing {url}")
                 df = self._utils.download_and_parse_file(url, data_type='firds', update=update)
                 
                 if not df.empty:
-                    dfs.append(df)
+                    # Filter by asset type after parsing (check CFI code first character)
+                    cfi_col = self._find_column(df, ['ClssfctnTp', 'CfiCd', 'FinInstrmGnlAttrbts_ClssfctnTp'])
+                    if cfi_col and cfi_col in df.columns:
+                        # Filter to requested asset type
+                        df = df[df[cfi_col].str[0] == asset_type]
+                        self.logger.info(f"  Filtered to {len(df)} records for asset type {asset_type}")
+                    
+                    if not df.empty:
+                        dfs.append(df)
             
             if not dfs:
                 return pd.DataFrame()
@@ -513,6 +541,149 @@ class FIRDSClient:
             # Restore original date range
             self.date_from = original_from
             self.date_to = original_to
+    
+    def process_delta_files(
+        self,
+        asset_type: str,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        update: bool = False
+    ) -> Dict:
+        """
+        Download and process delta files with version management.
+        
+        This method is only available in 'history' mode.
+        
+        This method:
+        1. Downloads DLTINS files for the date range
+        2. Extracts record types (NEW, MODIFIED, TERMINATED, CANCELLED)
+        3. Applies version management per ESMA Section 8.2
+        4. Updates instrument_history table
+        
+        Args:
+            asset_type: CFI first character (C, D, E, F, H, I, J, O, R, S)
+            date_from: Start date (defaults to instance date_from)
+            date_to: End date (defaults to instance date_to)
+            update: Force re-download of files (default: False, use cached data)
+        
+        Returns:
+            Dictionary with processing statistics
+        
+        Raises:
+            ValueError: If called in 'current' mode
+        
+        Example:
+            >>> firds = FIRDSClient(mode='history')
+            >>> # Process recent equity deltas
+            >>> stats = firds.process_delta_files(
+            ...     asset_type='E',
+            ...     date_from='2025-01-01',
+            ...     date_to='2025-01-31'
+            ... )
+            >>> print(f"Processed {stats['records_processed']} delta records")
+            >>> print(f"New: {stats['new']}, Modified: {stats['modified']}")
+        """
+        if self.mode != 'history':
+            raise ValueError(
+                "process_delta_files() is only available in 'history' mode. "
+                "Initialize client with FIRDSClient(mode='history')."
+            )
+        
+        self.logger.info(f"Processing delta files for asset type {asset_type}")
+        
+        # Download delta files
+        df = self.get_delta_files(
+            asset_type=asset_type,
+            date_from=date_from,
+            date_to=date_to,
+            update=update
+        )
+        
+        if df.empty:
+            self.logger.warning("No delta records found")
+            return {
+                'records_processed': 0,
+                'new': 0,
+                'modified': 0,
+                'terminated': 0,
+                'cancelled': 0,
+                'errors': 0
+            }
+        
+        # Check if _record_type column exists (from XML parsing)
+        if '_record_type' not in df.columns:
+            self.logger.error("Delta file missing record type information")
+            return {
+                'records_processed': 0,
+                'new': 0,
+                'modified': 0,
+                'terminated': 0,
+                'cancelled': 0,
+                'errors': len(df)
+            }
+        
+        # Extract publication date from filename or use current date
+        publication_date = datetime.today().strftime("%Y-%m-%d")
+        
+        # Process each record
+        stats = {
+            'records_processed': 0,
+            'new': 0,
+            'modified': 0,
+            'terminated': 0,
+            'cancelled': 0,
+            'errors': 0
+        }
+        
+        for idx, row in df.iterrows():
+            try:
+                isin = row.get('Id')
+                record_type = row.get('_record_type')
+                
+                if not isin or not record_type:
+                    stats['errors'] += 1
+                    continue
+                
+                # Convert row to dict for record_data
+                record_data = {
+                    'full_name': row.get('FinInstrmGnlAttrbts_FullNm', row.get('FullNm')),
+                    'cfi_code': row.get('FinInstrmGnlAttrbts_ClssfctnTp', row.get('ClssfctnTp')),
+                    'issuer': row.get('Issr', ''),
+                    'trading_venue_id': row.get('TradgVnId', ''),
+                    'cancellation_reason': row.get('CancellationReason', '')
+                }
+                
+                # Process with version management
+                result = self.data_store.process_delta_record(
+                    isin=isin,
+                    record_type=record_type,
+                    record_data=record_data,
+                    publication_date=publication_date,
+                    source_file=f"DLTINS_{asset_type}_{publication_date}"
+                )
+                
+                stats['records_processed'] += 1
+                if result['status'] == 'inserted':
+                    stats['new'] += 1
+                elif result['status'] == 'updated':
+                    stats['modified'] += 1
+                elif result['status'] == 'terminated':
+                    stats['terminated'] += 1
+                elif result['status'] == 'cancelled':
+                    stats['cancelled'] += 1
+                else:
+                    stats['errors'] += 1
+                    
+            except Exception as e:
+                self.logger.error(f"Error processing record {idx}: {e}")
+                stats['errors'] += 1
+        
+        self.logger.info(f"Delta processing complete: {stats['records_processed']} records processed")
+        self.logger.info(f"  NEW: {stats['new']}, MODIFIED: {stats['modified']}, "
+                        f"TERMINATED: {stats['terminated']}, CANCELLED: {stats['cancelled']}, "
+                        f"ERRORS: {stats['errors']}")
+        
+        return stats
     
     def download_file(self, url: str, update: bool = False) -> pd.DataFrame:
         """

@@ -34,13 +34,16 @@ class DuckDBStorage(StorageBackend):
     Performance: Bulk insert entire CSV in one transaction per asset type.
     """
     
-    def __init__(self, cache_dir: Path, db_path: Optional[str] = None):
+    def __init__(self, cache_dir: Path, db_path: Optional[str] = None, mode: str = 'current'):
         """Initialize DuckDB storage."""
         super().__init__(cache_dir)
         self.logger = logging.getLogger(__name__)
+        self.mode = mode
         
         if db_path is None:
-            self.db_path = str(self.cache_dir / 'firds.db')
+            # Use mode-specific database name
+            db_name = f'firds_{mode}.duckdb'
+            self.db_path = str(self.cache_dir / db_name)
         else:
             self.db_path = db_path
         
@@ -52,7 +55,7 @@ class DuckDBStorage(StorageBackend):
         if self.con is None:
             self.con = duckdb.connect(self.db_path)
     
-    def initialize(self, mode: str = 'current', verify_only: bool = False):
+    def initialize(self, mode: Optional[str] = None, verify_only: bool = False):
         """
         Initialize database and verify structure matches data models.
         
@@ -66,7 +69,7 @@ class DuckDBStorage(StorageBackend):
             3. Load: firds.get_latest_full_files() and firds.index_cached_files()
         
         Args:
-            mode: 'current' for FULINS-based snapshots (default) or 'delta' for incremental updates
+            mode: 'current' for FULINS-based snapshots or 'history' for version tracking (defaults to instance mode)
             verify_only: If True, only verify existing schema without creating tables
         
         Returns:
@@ -89,11 +92,12 @@ class DuckDBStorage(StorageBackend):
         """
         self._ensure_connection()
         
-        if mode not in ('current', 'delta'):
-            raise ValueError(f"Invalid mode: {mode}. Use 'current' or 'delta'")
+        # Use instance mode if not specified
+        if mode is None:
+            mode = self.mode
         
-        if mode == 'delta':
-            raise NotImplementedError("Delta mode not yet implemented")
+        if mode not in ['current', 'history']:
+            raise ValueError(f"Invalid mode '{mode}'. Must be 'current' or 'history'")
         
         # Check if database already exists
         db_file = Path(self.db_path)
@@ -457,11 +461,18 @@ class DuckDBStorage(StorageBackend):
         cfi_col = self._find_column(df, ['ClssfctnTp', 'CfiCd', 'classification_type', 'cfi_code'])
         issuer_col = self._find_column(df, ['Issr', 'issuer'])
         currency_col = self._find_column(df, ['NtnlCcy', 'notional_currency', 'currency'])
+        publication_date_col = self._find_column(df, ['RefData_TechAttrbts_PblctnPrd_FrDt', 'TechAttrbts_PblctnPrd_FrDt', 'PblctnPrd_FrDt'])
+        record_type_col = self._find_column(df, ['_record_type'])
         
         cfi_code = df[cfi_col] if cfi_col else None
         instrument_type = cfi_code.str[0] if cfi_code is not None else None
         
-        master_df = pd.DataFrame({
+        # Mode-specific column handling:
+        # - 'current' mode: minimal columns, no historical tracking
+        # - 'history' mode: include historical tracking fields
+        is_delta = 'DLTINS' in source_file
+        
+        base_df = pd.DataFrame({
             'isin': df[isin_col] if isin_col else None,
             'cfi_code': cfi_code,
             'instrument_type': instrument_type,
@@ -473,7 +484,19 @@ class DuckDBStorage(StorageBackend):
             'updated_at': pd.Timestamp.now()
         })
         
-        master_df = master_df.dropna(subset=['isin'])
+        # Add historical tracking fields only in history mode
+        if self.mode == 'history':
+            publication_date = pd.to_datetime(df[publication_date_col], errors='coerce').iloc[0] if publication_date_col and len(df) > 0 else pd.Timestamp.now()
+            base_df['valid_from_date'] = publication_date if not is_delta else None
+            base_df['valid_to_date'] = None
+            base_df['latest_record_flag'] = True if not is_delta else None
+            base_df['record_type'] = df[record_type_col] if record_type_col else 'NEW'
+            base_df['version_number'] = 1 if not is_delta else None
+            base_df['source_file_type'] = 'DLTINS' if is_delta else 'FULINS'
+            base_df['last_update_timestamp'] = pd.Timestamp.now()
+            base_df['inconsistency_indicator'] = None
+        
+        master_df = base_df.dropna(subset=['isin'])
         return master_df
     
     def _insert_listings(self, df: pd.DataFrame, source_file: str):
@@ -544,19 +567,45 @@ class DuckDBStorage(StorageBackend):
             instrument_type = master_df['instrument_type'].iloc[0] if len(master_df) > 0 else None
             self.logger.info(f"Detected instrument type: {instrument_type} (sample CFI: {master_df['cfi_code'].iloc[0] if len(master_df) > 0 else 'N/A'})")
             
-            self.con.execute("""
-                INSERT INTO instruments 
-                SELECT * FROM master_df
-                ON CONFLICT (isin) DO UPDATE SET
-                    cfi_code = EXCLUDED.cfi_code,
-                    instrument_type = EXCLUDED.instrument_type,
-                    issuer = EXCLUDED.issuer,
-                    full_name = EXCLUDED.full_name,
-                    currency = EXCLUDED.currency,
-                    source_file = EXCLUDED.source_file,
-                    indexed_at = EXCLUDED.indexed_at,
-                    updated_at = EXCLUDED.updated_at
-            """)
+            # Build INSERT statement based on mode
+            if self.mode == 'current':
+                # Current mode: simple UPDATE without historical fields
+                self.con.execute("""
+                    INSERT INTO instruments 
+                    SELECT * FROM master_df
+                    ON CONFLICT (isin) DO UPDATE SET
+                        cfi_code = EXCLUDED.cfi_code,
+                        instrument_type = EXCLUDED.instrument_type,
+                        issuer = EXCLUDED.issuer,
+                        full_name = EXCLUDED.full_name,
+                        currency = EXCLUDED.currency,
+                        source_file = EXCLUDED.source_file,
+                        indexed_at = EXCLUDED.indexed_at,
+                        updated_at = EXCLUDED.updated_at
+                """)
+            else:  # history mode
+                # History mode: include all historical tracking fields
+                self.con.execute("""
+                    INSERT INTO instruments 
+                    SELECT * FROM master_df
+                    ON CONFLICT (isin) DO UPDATE SET
+                        cfi_code = EXCLUDED.cfi_code,
+                        instrument_type = EXCLUDED.instrument_type,
+                        issuer = EXCLUDED.issuer,
+                        full_name = EXCLUDED.full_name,
+                        currency = EXCLUDED.currency,
+                        source_file = EXCLUDED.source_file,
+                        indexed_at = EXCLUDED.indexed_at,
+                        updated_at = EXCLUDED.updated_at,
+                        valid_from_date = EXCLUDED.valid_from_date,
+                        valid_to_date = EXCLUDED.valid_to_date,
+                        latest_record_flag = EXCLUDED.latest_record_flag,
+                        record_type = EXCLUDED.record_type,
+                        version_number = EXCLUDED.version_number,
+                        source_file_type = EXCLUDED.source_file_type,
+                        last_update_timestamp = EXCLUDED.last_update_timestamp,
+                        inconsistency_indicator = EXCLUDED.inconsistency_indicator
+                """)
             
             # Insert listings (one row per ISIN-venue combination)
             self._insert_listings(df, source_file)
@@ -897,6 +946,345 @@ class DuckDBStorage(StorageBackend):
                 })
         
         return instruments
+    
+    def get_latest_instruments(self, limit: Optional[int] = None) -> pd.DataFrame:
+        """
+        Get all latest (current) versions of instruments.
+        
+        Per ESMA Section 9: Query pattern for latest versions.
+        
+        Args:
+            limit: Optional limit on results
+            
+        Returns:
+            DataFrame with current instrument versions
+            
+        Example:
+            >>> storage.get_latest_instruments(limit=1000)
+        """
+        sql = """
+            SELECT * FROM instruments
+            WHERE latest_record_flag = TRUE
+        """
+        if limit:
+            sql += f" LIMIT {limit}"
+        
+        return self.con.execute(sql).fetchdf()
+    
+    def get_instruments_active_on_date(self, target_date: str, limit: Optional[int] = None) -> pd.DataFrame:
+        """
+        Get instruments that were active on a specific date.
+        
+        Per ESMA Section 9: Query instruments active on date T using Field11/Field12.
+        
+        Args:
+            target_date: Date in YYYY-MM-DD format
+            limit: Optional limit on results
+            
+        Returns:
+            DataFrame with instruments active on that date
+            
+        Example:
+            >>> storage.get_instruments_active_on_date('2024-06-15')
+        """
+        sql = """
+            SELECT i.*, l.first_trade_date, l.termination_date
+            FROM instruments i
+            LEFT JOIN listings l ON i.isin = l.isin
+            WHERE l.first_trade_date <= ?
+              AND (l.termination_date IS NULL OR l.termination_date >= ?)
+        """
+        if limit:
+            sql += f" LIMIT {limit}"
+        
+        return self.con.execute(sql, [target_date, target_date]).fetchdf()
+    
+    def get_instrument_state_on_date(self, isin: str, target_date: str) -> Optional[Dict[str, Any]]:
+        """
+        Get historical state of an instrument on a specific date.
+        
+        Per ESMA Section 9: Query historical state on date T.
+        
+        Args:
+            isin: Instrument ISIN
+            target_date: Date in YYYY-MM-DD format
+            
+        Returns:
+            Instrument record as it existed on that date, or None
+            
+        Example:
+            >>> storage.get_instrument_state_on_date('GB00B1YW4409', '2023-06-15')
+        """
+        result = self.con.execute("""
+            SELECT * FROM instrument_history
+            WHERE isin = ?
+              AND valid_from_date <= ?
+              AND (valid_to_date IS NULL OR valid_to_date >= ?)
+            ORDER BY version_number DESC
+            LIMIT 1
+        """, [isin, target_date, target_date]).fetchdf()
+        
+        if result.empty:
+            # Fallback to current instruments table
+            result = self.con.execute("""
+                SELECT * FROM instruments
+                WHERE isin = ?
+                  AND valid_from_date <= ?
+                  AND (valid_to_date IS NULL OR valid_to_date >= ?)
+            """, [isin, target_date, target_date]).fetchdf()
+        
+        return result.iloc[0].to_dict() if not result.empty else None
+    
+    def get_instrument_version_history(self, isin: str) -> pd.DataFrame:
+        """
+        Get complete version history for an instrument.
+        
+        Args:
+            isin: Instrument ISIN
+            
+        Returns:
+            DataFrame with all versions ordered by version_number
+            
+        Example:
+            >>> history = storage.get_instrument_version_history('GB00B1YW4409')
+            >>> print(f"Versions: {len(history)}")
+        """
+        return self.con.execute("""
+            SELECT * FROM instrument_history
+            WHERE isin = ?
+            ORDER BY version_number ASC
+        """, [isin]).fetchdf()
+    
+    def get_modified_instruments_since(self, since_date: str) -> pd.DataFrame:
+        """
+        Get instruments modified since a specific date.
+        
+        Useful for tracking changes and delta processing.
+        
+        Args:
+            since_date: Date in YYYY-MM-DD format
+            
+        Returns:
+            DataFrame with modified instruments
+        """
+        return self.con.execute("""
+            SELECT * FROM instruments
+            WHERE valid_from_date >= ?
+              AND record_type IN ('MODIFIED', 'NEW')
+            ORDER BY valid_from_date DESC
+        """, [since_date]).fetchdf()
+    
+    def get_cancelled_instruments(self, since_date: Optional[str] = None) -> pd.DataFrame:
+        """
+        Get cancelled instruments from FULCAN files.
+        
+        Args:
+            since_date: Optional date filter (YYYY-MM-DD)
+            
+        Returns:
+            DataFrame with cancellation records
+        """
+        sql = "SELECT * FROM cancellations"
+        params = []
+        
+        if since_date:
+            sql += " WHERE cancellation_date >= ?"
+            params.append(since_date)
+        
+        sql += " ORDER BY cancellation_date DESC"
+        
+        return self.con.execute(sql, params if params else None).fetchdf()
+    
+    def process_delta_record(self, isin: str, record_type: str, record_data: Dict[str, Any],
+                            publication_date: str, source_file: str) -> Dict[str, str]:
+        """
+        Process a delta file record per ESMA Section 8.2 version management.
+        
+        Args:
+            isin: Instrument ISIN
+            record_type: NEW, MODIFIED, TERMINATED, or CANCELLED
+            record_data: Instrument attributes
+            publication_date: Publication date from file (becomes valid_from_date)
+            source_file: Source file name
+            
+        Returns:
+            Dictionary with status and message
+            
+        Example:
+            >>> storage.process_delta_record(
+            ...     isin='GB00B1YW4409',
+            ...     record_type='MODIFIED',
+            ...     record_data={...},
+            ...     publication_date='2025-01-10',
+            ...     source_file='DLTINS_S_20250110_01of01.zip'
+            ... )
+        """
+        import json
+        from datetime import datetime, timedelta
+        
+        if record_type == "NEW":
+            # Insert new instrument version
+            # Check if ISIN already exists (late record scenario)
+            existing = self.con.execute("""
+                SELECT version_number FROM instruments WHERE isin = ?
+            """, [isin]).fetchone()
+            
+            if existing:
+                # Late NEW record - existing instrument
+                next_version = existing[0] + 1
+                
+                # Close previous version
+                close_date = datetime.strptime(publication_date, '%Y-%m-%d') - timedelta(days=1)
+                self.con.execute("""
+                    UPDATE instruments
+                    SET valid_to_date = ?,
+                        latest_record_flag = FALSE
+                    WHERE isin = ? AND latest_record_flag = TRUE
+                """, [close_date.strftime('%Y-%m-%d'), isin])
+                
+                # Insert into history
+                self.con.execute("""
+                    INSERT INTO instrument_history 
+                    (isin, version_number, valid_from_date, valid_to_date, record_type,
+                     cfi_code, full_name, issuer, attributes, source_file, source_file_type, indexed_at)
+                    SELECT isin, version_number, valid_from_date, ?, 'NEW',
+                           cfi_code, full_name, issuer, ?::JSON, source_file, source_file_type, indexed_at
+                    FROM instruments
+                    WHERE isin = ?
+                """, [close_date.strftime('%Y-%m-%d'), json.dumps(record_data), isin])
+            else:
+                # Truly new instrument
+                next_version = 1
+            
+            # Insert new version into instruments table
+            self.con.execute("""
+                INSERT OR REPLACE INTO instruments 
+                (isin, valid_from_date, valid_to_date, latest_record_flag, record_type,
+                 version_number, source_file_type, last_update_timestamp, 
+                 full_name, cfi_code, issuer)
+                VALUES (?, ?, NULL, TRUE, ?, ?, 'DLTINS', ?, ?, ?, ?)
+            """, [isin, publication_date, record_type, next_version,
+                  datetime.now().isoformat(), 
+                  record_data.get('full_name'),
+                  record_data.get('cfi_code'),
+                  record_data.get('issuer')])
+            
+            return {"status": "inserted", "message": f"NEW record for {isin}, version {next_version}"}
+        
+        elif record_type == "MODIFIED":
+            # Close previous version and insert new one
+            existing = self.con.execute("""
+                SELECT version_number, valid_from_date 
+                FROM instruments 
+                WHERE isin = ? AND latest_record_flag = TRUE
+            """, [isin]).fetchone()
+            
+            if not existing:
+                return {"status": "error", "message": f"Cannot modify non-existent ISIN: {isin}"}
+            
+            current_version, prev_valid_from = existing
+            next_version = current_version + 1
+            
+            # Close previous version (valid_to_date = new valid_from - 1 day)
+            close_date = datetime.strptime(publication_date, '%Y-%m-%d') - timedelta(days=1)
+            
+            # Archive to history before updating
+            self.con.execute("""
+                INSERT INTO instrument_history
+                (isin, version_number, valid_from_date, valid_to_date, record_type,
+                 cfi_code, full_name, issuer, attributes, source_file, source_file_type, indexed_at)
+                SELECT isin, version_number, valid_from_date, ?, record_type,
+                       cfi_code, full_name, issuer, ?::JSON, source_file, source_file_type, indexed_at
+                FROM instruments
+                WHERE isin = ? AND latest_record_flag = TRUE
+            """, [close_date.strftime('%Y-%m-%d'), json.dumps(record_data), isin])
+            
+            # Update current record with new version
+            self.con.execute("""
+                UPDATE instruments
+                SET valid_from_date = ?,
+                    valid_to_date = NULL,
+                    latest_record_flag = TRUE,
+                    record_type = ?,
+                    version_number = ?,
+                    source_file_type = 'DLTINS',
+                    last_update_timestamp = ?,
+                    full_name = ?,
+                    cfi_code = ?,
+                    issuer = ?
+                WHERE isin = ?
+            """, [publication_date, record_type, next_version,
+                  datetime.now().isoformat(),
+                  record_data.get('full_name'),
+                  record_data.get('cfi_code'),
+                  record_data.get('issuer'),
+                  isin])
+            
+            return {"status": "updated", "message": f"MODIFIED record for {isin}, version {next_version}"}
+        
+        elif record_type == "TERMINATED":
+            # Close instrument (set valid_to_date, mark not latest)
+            existing = self.con.execute("""
+                SELECT version_number FROM instruments WHERE isin = ? AND latest_record_flag = TRUE
+            """, [isin]).fetchone()
+            
+            if not existing:
+                return {"status": "error", "message": f"Cannot terminate non-existent ISIN: {isin}"}
+            
+            # Archive to history before termination
+            self.con.execute("""
+                INSERT INTO instrument_history
+                (isin, version_number, valid_from_date, valid_to_date, record_type,
+                 cfi_code, full_name, issuer, attributes, source_file, source_file_type, indexed_at)
+                SELECT isin, version_number, valid_from_date, ?, 'TERMINATED',
+                       cfi_code, full_name, issuer, ?::JSON, source_file, source_file_type, indexed_at
+                FROM instruments
+                WHERE isin = ? AND latest_record_flag = TRUE
+            """, [publication_date, json.dumps(record_data), isin])
+            
+            # Mark as terminated
+            self.con.execute("""
+                UPDATE instruments
+                SET valid_to_date = ?,
+                    latest_record_flag = FALSE,
+                    record_type = 'TERMINATED',
+                    last_update_timestamp = ?
+                WHERE isin = ? AND latest_record_flag = TRUE
+            """, [publication_date, datetime.now().isoformat(), isin])
+            
+            return {"status": "terminated", "message": f"TERMINATED record for {isin}"}
+        
+        elif record_type == "CANCELLED":
+            # Move to cancellations table and remove from instruments
+            # Extract trading venue if available
+            trading_venue = record_data.get('trading_venue_id', 'UNKNOWN')
+            cancellation_reason = record_data.get('cancellation_reason', 'Not specified')
+            
+            # Get original publication date if available
+            original_pub_date = self.con.execute("""
+                SELECT MIN(valid_from_date) FROM instruments WHERE isin = ?
+            """, [isin]).fetchone()
+            
+            original_pub_date_str = original_pub_date[0] if original_pub_date and original_pub_date[0] else None
+            
+            # Insert into cancellations
+            self.con.execute("""
+                INSERT INTO cancellations
+                (isin, trading_venue_id, cancellation_date, cancellation_reason,
+                 original_publication_date, source_file, indexed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, [isin, trading_venue, publication_date, cancellation_reason,
+                  original_pub_date_str, source_file, datetime.now().isoformat()])
+            
+            # Remove from instruments (optional - could also mark as cancelled)
+            self.con.execute("""
+                DELETE FROM instruments WHERE isin = ?
+            """, [isin])
+            
+            return {"status": "cancelled", "message": f"CANCELLED record for {isin}, moved to cancellations"}
+        
+        else:
+            return {"status": "error", "message": f"Unknown record type: {record_type}"}
     
     def close(self):
         """Close database connection."""

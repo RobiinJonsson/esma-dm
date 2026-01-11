@@ -6,7 +6,7 @@ Star schema with master instruments table and asset-specific detail tables.
 
 
 def create_master_table(con):
-    """Create master instruments table with core fields."""
+    """Create master instruments table with core fields and historical tracking."""
     con.execute("""
         CREATE TABLE IF NOT EXISTS instruments (
             isin VARCHAR PRIMARY KEY,
@@ -15,11 +15,31 @@ def create_master_table(con):
             issuer VARCHAR,
             full_name VARCHAR,
             currency VARCHAR,
+            
+            -- Historical tracking (ESMA Section 8)
+            valid_from_date DATE,
+            valid_to_date DATE,
+            latest_record_flag BOOLEAN DEFAULT TRUE,
+            record_type VARCHAR,
+            version_number INTEGER DEFAULT 1,
+            
+            -- Source tracking
             source_file VARCHAR,
+            source_file_type VARCHAR,
+            last_update_timestamp TIMESTAMP,
+            inconsistency_indicator VARCHAR,
+            
+            -- System fields
             indexed_at TIMESTAMP,
             updated_at TIMESTAMP DEFAULT now()
         )
     """)
+    
+    # Create indexes for historical queries
+    con.execute("CREATE INDEX IF NOT EXISTS idx_instruments_latest ON instruments(latest_record_flag)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_instruments_valid_from ON instruments(valid_from_date)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_instruments_valid_to ON instruments(valid_to_date)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_instruments_record_type ON instruments(record_type)")
 
 
 def create_listings_table(con):
@@ -61,6 +81,7 @@ def create_equity_table(con):
             capital_investment_restriction VARCHAR,
             competent_authority VARCHAR,
             publication_date DATE,
+            version_number INTEGER DEFAULT 1,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
     """)
@@ -86,6 +107,7 @@ def create_debt_table(con):
             delivery_type VARCHAR,
             competent_authority VARCHAR,
             publication_date DATE,
+            version_number INTEGER DEFAULT 1,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
     """)
@@ -134,6 +156,7 @@ def create_option_table(con):
             other_notional_currency VARCHAR,
             competent_authority VARCHAR,
             publication_date DATE,
+            version_number INTEGER DEFAULT 1,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
     """)
@@ -161,6 +184,7 @@ def create_swap_table(con):
             fx_other_notional_currency VARCHAR,
             competent_authority VARCHAR,
             publication_date DATE,
+            version_number INTEGER DEFAULT 1,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
     """)
@@ -186,6 +210,7 @@ def create_forward_table(con):
             commodity_additional_sub_product VARCHAR,
             competent_authority VARCHAR,
             publication_date DATE,
+            version_number INTEGER DEFAULT 1,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
     """)
@@ -216,6 +241,7 @@ def create_rights_table(con):
             fx_other_notional_currency VARCHAR,
             competent_authority VARCHAR,
             publication_date DATE,
+            version_number INTEGER DEFAULT 1,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
     """)
@@ -230,6 +256,7 @@ def create_civ_table(con):
             underlying_isin VARCHAR,
             competent_authority VARCHAR,
             publication_date DATE,
+            version_number INTEGER DEFAULT 1,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
     """)
@@ -248,6 +275,7 @@ def create_spot_table(con):
             final_price_type VARCHAR,
             competent_authority VARCHAR,
             publication_date DATE,
+            version_number INTEGER DEFAULT 1,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
     """)
@@ -266,6 +294,59 @@ def create_metadata_table(con):
     """)
 
 
+def create_cancellations_table(con):
+    """Create table for cancelled records (FULCAN files)."""
+    con.execute("""
+        CREATE SEQUENCE IF NOT EXISTS seq_cancellations_id START 1;
+        
+        CREATE TABLE IF NOT EXISTS cancellations (
+            id INTEGER PRIMARY KEY DEFAULT nextval('seq_cancellations_id'),
+            isin VARCHAR NOT NULL,
+            trading_venue_id VARCHAR,
+            cancellation_date DATE,
+            cancellation_reason VARCHAR,
+            original_publication_date DATE,
+            source_file VARCHAR,
+            indexed_at TIMESTAMP
+        )
+    """)
+    con.execute("CREATE INDEX IF NOT EXISTS idx_cancellations_isin ON cancellations(isin)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_cancellations_date ON cancellations(cancellation_date)")
+
+
+def create_instrument_history_table(con):
+    """
+    Create table for full instrument version history.
+    
+    Stores all versions of each instrument to support temporal queries
+    as per ESMA Section 8 guidance.
+    """
+    con.execute("""
+        CREATE SEQUENCE IF NOT EXISTS seq_instrument_history_id START 1;
+        
+        CREATE TABLE IF NOT EXISTS instrument_history (
+            id INTEGER PRIMARY KEY DEFAULT nextval('seq_instrument_history_id'),
+            isin VARCHAR NOT NULL,
+            version_number INTEGER NOT NULL,
+            valid_from_date DATE NOT NULL,
+            valid_to_date DATE,
+            record_type VARCHAR,
+            cfi_code VARCHAR,
+            full_name VARCHAR,
+            issuer VARCHAR,
+            attributes JSON,
+            source_file VARCHAR,
+            source_file_type VARCHAR,
+            indexed_at TIMESTAMP,
+            UNIQUE(isin, version_number)
+        )
+    """)
+    con.execute("CREATE INDEX IF NOT EXISTS idx_history_isin ON instrument_history(isin)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_history_valid_from ON instrument_history(valid_from_date)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_history_valid_to ON instrument_history(valid_to_date)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_history_version ON instrument_history(isin, version_number)")
+
+
 def create_indexes(con):
     """Create indexes for common query patterns."""
     indexes = [
@@ -280,7 +361,7 @@ def create_indexes(con):
 
 
 def initialize_schema(con):
-    """Initialize complete database schema."""
+    """Initialize complete database schema with historical tracking."""
     create_master_table(con)
     create_listings_table(con)
     create_equity_table(con)
@@ -293,4 +374,6 @@ def initialize_schema(con):
     create_civ_table(con)
     create_spot_table(con)
     create_metadata_table(con)
+    create_cancellations_table(con)
+    create_instrument_history_table(con)
     create_indexes(con)
