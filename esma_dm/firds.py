@@ -16,7 +16,8 @@ import requests
 
 from .utils import Utils
 from .config import default_config
-from .storage import StorageBackend, JSONStorage, DuckDBStorage
+from .storage import StorageBackend, DuckDBStorage
+import config as global_config
 
 
 class FileType(Enum):
@@ -157,13 +158,13 @@ class FIRDSClient:
         >>> instruments = firds.get_instruments(['GB00B1YW4409', 'US0378331005'])
     """
     
-    BASE_URL = "https://registers.esma.europa.eu/solr/esma_registers_firds_files/select"
+    BASE_URL = global_config.FIRDS_BASE_URL
     
     def __init__(
         self,
-        date_from: str = "2017-01-01",
+        date_from: str = global_config.FIRDS_DATE_FROM,
         date_to: Optional[str] = None,
-        limit: int = 10000,
+        limit: int = global_config.FIRDS_REQUEST_LIMIT,
         config: Optional[Any] = None,
         storage_backend: str = 'duckdb',
         db_path: Optional[str] = None
@@ -197,12 +198,10 @@ class FIRDSClient:
             cache_dir = self.config.downloads_path / 'firds'
             cache_dir.mkdir(parents=True, exist_ok=True)
             
-            if self.storage_backend == 'json':
-                self._data_store = JSONStorage(cache_dir)
-            elif self.storage_backend == 'duckdb':
+            if self.storage_backend == 'duckdb':
                 self._data_store = DuckDBStorage(cache_dir, db_path=self.db_path)
             else:
-                raise ValueError(f"Unknown storage backend: {self.storage_backend}")
+                raise ValueError(f"Unknown storage backend: {self.storage_backend}. Only 'duckdb' is currently supported.")
         
         return self._data_store
     
@@ -215,7 +214,7 @@ class FIRDSClient:
         Retrieve list of available FIRDS files.
         
         Args:
-            file_type: Filter by file type ("FULINS" or "DLTINS")
+            file_type: Filter by file_type ("FULINS" or "DLTINS")
             asset_type: Filter by asset type (C, D, E, F, H, I, J, O, R, S)
         
         Returns:
@@ -257,8 +256,8 @@ class FIRDSClient:
         
         if asset_type:
             asset_type_upper = asset_type.upper()
-            pattern = rf"{file_type or '[A-Z]+'}_{{asset_type_upper}}_"
-            df = df[df['file_name'].str.match(pattern, na=False)]
+            pattern = rf"_{asset_type_upper}_"
+            df = df[df['file_name'].str.contains(pattern, na=False)]
         
         return df
     
@@ -324,7 +323,6 @@ class FIRDSClient:
         
         # Get file list with filters
         files = self.get_file_list(file_type='FULINS', asset_type=asset_type)
-        files = files[files['file_type'] == 'Full']
         
         if files.empty:
             self.logger.warning(f"No FULINS files found for asset type {asset_type}")
@@ -650,7 +648,7 @@ class FIRDSClient:
         
         return True
     
-    def index_cached_files(self, delete_csv: bool = True) -> Dict:
+    def index_cached_files(self, delete_csv: bool = global_config.DELETE_CSV_AFTER_INDEX) -> Dict:
         """
         Index all downloaded CSV files into the JSON data store.
         
@@ -659,7 +657,7 @@ class FIRDSClient:
         deletes CSV files after successful indexing to save disk space.
         
         Args:
-            delete_csv: Delete CSV files after successful indexing (default True)
+            delete_csv: Delete CSV files after successful indexing (default False)
         
         Returns:
             Dictionary with indexing statistics

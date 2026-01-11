@@ -22,6 +22,32 @@ def create_master_table(con):
     """)
 
 
+def create_listings_table(con):
+    """Create listings table for trading venue information.
+    
+    One ISIN can have multiple listings on different venues.
+    """
+    con.execute("""
+        CREATE SEQUENCE IF NOT EXISTS listings_id_seq START 1
+    """)
+    
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS listings (
+            id INTEGER PRIMARY KEY DEFAULT nextval('listings_id_seq'),
+            isin VARCHAR NOT NULL,
+            trading_venue_id VARCHAR,
+            first_trade_date DATE,
+            termination_date DATE,
+            admission_approval_date TIMESTAMP,
+            request_for_admission_date TIMESTAMP,
+            issuer_request VARCHAR,
+            source_file VARCHAR,
+            indexed_at TIMESTAMP,
+            FOREIGN KEY (isin) REFERENCES instruments(isin)
+        )
+    """)
+
+
 def create_equity_table(con):
     """Create equity instruments table (E)."""
     con.execute("""
@@ -33,9 +59,8 @@ def create_equity_table(con):
             ownership_restriction VARCHAR,
             redemption_type VARCHAR,
             capital_investment_restriction VARCHAR,
-            trading_venue_id VARCHAR,
-            first_trade_date DATE,
-            termination_date DATE,
+            competent_authority VARCHAR,
+            publication_date DATE,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
     """)
@@ -59,9 +84,8 @@ def create_debt_table(con):
             floating_rate_basis_spread DOUBLE,
             debt_seniority VARCHAR,
             delivery_type VARCHAR,
-            trading_venue_id VARCHAR,
-            first_trade_date DATE,
-            termination_date DATE,
+            competent_authority VARCHAR,
+            publication_date DATE,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
     """)
@@ -81,9 +105,8 @@ def create_futures_table(con):
             commodity_base_product VARCHAR,
             commodity_sub_product VARCHAR,
             commodity_additional_sub_product VARCHAR,
-            trading_venue_id VARCHAR,
-            first_trade_date DATE,
-            termination_date DATE,
+            competent_authority VARCHAR,
+            publication_date DATE,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
     """)
@@ -109,9 +132,8 @@ def create_option_table(con):
             delivery_type VARCHAR,
             fx_type VARCHAR,
             other_notional_currency VARCHAR,
-            trading_venue_id VARCHAR,
-            first_trade_date DATE,
-            termination_date DATE,
+            competent_authority VARCHAR,
+            publication_date DATE,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
     """)
@@ -137,9 +159,8 @@ def create_swap_table(con):
             interest_rate_term_unit VARCHAR,
             interest_rate_term_value VARCHAR,
             fx_other_notional_currency VARCHAR,
-            trading_venue_id VARCHAR,
-            first_trade_date DATE,
-            termination_date DATE,
+            competent_authority VARCHAR,
+            publication_date DATE,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
     """)
@@ -163,9 +184,8 @@ def create_forward_table(con):
             commodity_base_product VARCHAR,
             commodity_sub_product VARCHAR,
             commodity_additional_sub_product VARCHAR,
-            trading_venue_id VARCHAR,
-            first_trade_date DATE,
-            termination_date DATE,
+            competent_authority VARCHAR,
+            publication_date DATE,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
     """)
@@ -194,9 +214,8 @@ def create_rights_table(con):
             commodity_additional_sub_product VARCHAR,
             fx_type VARCHAR,
             fx_other_notional_currency VARCHAR,
-            trading_venue_id VARCHAR,
-            first_trade_date DATE,
-            termination_date DATE,
+            competent_authority VARCHAR,
+            publication_date DATE,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
     """)
@@ -209,9 +228,8 @@ def create_civ_table(con):
             isin VARCHAR PRIMARY KEY,
             short_name VARCHAR,
             underlying_isin VARCHAR,
-            trading_venue_id VARCHAR,
-            first_trade_date DATE,
-            termination_date DATE,
+            competent_authority VARCHAR,
+            publication_date DATE,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
     """)
@@ -228,9 +246,8 @@ def create_spot_table(con):
             commodity_additional_sub_product VARCHAR,
             transaction_type VARCHAR,
             final_price_type VARCHAR,
-            trading_venue_id VARCHAR,
-            first_trade_date DATE,
-            termination_date DATE,
+            competent_authority VARCHAR,
+            publication_date DATE,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
     """)
@@ -254,15 +271,8 @@ def create_indexes(con):
     indexes = [
         "CREATE INDEX IF NOT EXISTS idx_instruments_type ON instruments(instrument_type)",
         "CREATE INDEX IF NOT EXISTS idx_instruments_cfi ON instruments(cfi_code)",
-        "CREATE INDEX IF NOT EXISTS idx_equity_venue ON equity_instruments(trading_venue_id)",
-        "CREATE INDEX IF NOT EXISTS idx_debt_venue ON debt_instruments(trading_venue_id)",
-        "CREATE INDEX IF NOT EXISTS idx_futures_venue ON futures_instruments(trading_venue_id)",
-        "CREATE INDEX IF NOT EXISTS idx_option_venue ON option_instruments(trading_venue_id)",
-        "CREATE INDEX IF NOT EXISTS idx_swap_venue ON swap_instruments(trading_venue_id)",
-        "CREATE INDEX IF NOT EXISTS idx_forward_venue ON forward_instruments(trading_venue_id)",
-        "CREATE INDEX IF NOT EXISTS idx_rights_venue ON rights_instruments(trading_venue_id)",
-        "CREATE INDEX IF NOT EXISTS idx_civ_venue ON civ_instruments(trading_venue_id)",
-        "CREATE INDEX IF NOT EXISTS idx_spot_venue ON spot_instruments(trading_venue_id)"
+        "CREATE INDEX IF NOT EXISTS idx_listings_isin ON listings(isin)",
+        "CREATE INDEX IF NOT EXISTS idx_listings_venue ON listings(trading_venue_id)"
     ]
     
     for index_sql in indexes:
@@ -272,6 +282,7 @@ def create_indexes(con):
 def initialize_schema(con):
     """Initialize complete database schema."""
     create_master_table(con)
+    create_listings_table(con)
     create_equity_table(con)
     create_debt_table(con)
     create_futures_table(con)

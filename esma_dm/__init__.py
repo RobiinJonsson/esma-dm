@@ -44,13 +44,18 @@ from .clients.benchmarks import BenchmarksClient
 from .clients.ssr import SSRClient
 from .config import Config
 from .reference_api import ReferenceAPI
+from .transparency_api import TransparencyAPI
 
 # Global reference API instance
 reference = ReferenceAPI()
 
+# Global transparency API instance
+transparency = TransparencyAPI()
+
 __all__ = [
     # Convenience functions
     "reference",
+    "transparency",
     
     # Clients
     "FIRDSClient",

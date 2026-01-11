@@ -8,6 +8,131 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+#### Full MiFIR Transparency Support (2026-01-11)
+- Complete ESMA65-8-5240 transparency requirements implementation
+- Extended transparency table schema with 15+ MiFIR-compliant fields:
+  - Most relevant market: most_relevant_market_id, most_relevant_market_avg_daily_trades
+  - Application periods: application_period_from, application_period_to (from April 2025 files)
+  - Non-equity thresholds: pre_trade_lis_threshold, post_trade_lis_threshold, pre_trade_ssti_threshold, post_trade_ssti_threshold
+  - Metadata: instrument_type, file_type tracking
+- New subclass_transparency table for sub-class level results:
+  - Support for FULNCR_NYAR (yearly non-equity sub-class results)
+  - Support for FULNCR_SISC (SI non-equity sub-class results)
+  - Segmentation criteria stored as JSON (30+ criteria types: BSPD, SBPD, FSPD, TTMB, etc.)
+  - Fields: asset_class, sub_asset_class_code, sub_asset_class_description, calculation_type, methodology
+- Delta file support:
+  - DLTECR (equity delta): Incremental ISIN-level updates
+  - DLTNCR (non-equity delta): Incremental ISIN-level updates
+  - INSERT OR REPLACE logic for proper incremental updates
+- Updated column mapping: FrDt/ToDt → reporting_period_from/to, Id_2 → most_relevant_market_id
+- Enhanced query methods with new filters: instrument_type, most_relevant_market, methodology
+- New query_subclass_transparency() method for sub-class level queries
+- insert_subclass_transparency_data() method with JSON segmentation criteria handling
+- Full file type support: FULECR, FULNCR, DLTECR, DLTNCR, FULNCR_NYAR, FULNCR_SISC
+- Extended index() method to handle all file types and sub-class data
+- TransparencyAPI.query_subclass() for user-facing sub-class queries
+- Transparency utility enums (transparency_enums.py):
+  - Methodology enum: SINT, YEAR, ESTM, FFWK with descriptions
+  - InstrumentClassification enum: SHRS, DPRS, ETFS, OTHR with descriptions
+  - FileType enum: All 6 FITRS file types with descriptions and type checks
+  - SegmentationCriteria enum: 40+ segmentation criteria codes with descriptions and categories
+  - Helper functions: format_methodology_info(), format_classification_info(), format_segmentation_info()
+  - Client utility methods: get_methodology_info(), get_classification_info(), list_methodologies(), list_classifications(), list_file_types()
+
+#### FITRS Transparency Data Support (2026-01-11)
+- Separate FITRS database (fitrs.db) for transparency data storage
+- Support for FULECR (equity) and FULNCR (non-equity) transparency files
+- Cross-database query support via DuckDB ATTACH feature
+- New transparency API: edm.transparency(isin) parallel to edm.reference(isin)
+- TransparencyAPI class with index(), query(), and attach_firds() methods
+- FITRSStorage backend with dedicated schema for transparency metrics
+- Database schema includes: transparency, equity_transparency, non_equity_transparency, subclass_transparency, transparency_metadata tables
+- index_transparency_data() method to download and process FITRS files
+- Query methods with filters: liquid_only, instrument_type, min_turnover
+- Cross-database SQL queries joining FIRDS reference data with transparency metrics
+- Example script: examples/06_transparency_data.py demonstrating all features
+
+#### Subtype Output Models (2026-01-10)
+- Created 8 specialized output models for major instrument subtypes
+- Models based on actual FIRDS fields verified from CSV data
+- EquitySwap (SE*): 28 fields including underlying_isin, interest_rate_reference_name
+- Swaption (HR*): 38 fields including option_type, strike_price, first_leg_interest_rate
+- EquityOption (HE*): 33 fields including option_type, strike_price, underlying_isin
+- MiniFuture (RF*): 50 fields including 19 commodity fields and 2 FX fields
+- StructuredEquity (EY*): 28 fields with underlying references and commodity attributes
+- StructuredDebt (DE*): 29 fields with interest rates and debt seniority
+- CommodityFuture (FC*): 56 fields with extensive commodity taxonomy (33 fields)
+- FXForward (JF*): 22 fields including fx_type and notional currencies
+- All models include from_dict() classmethod to parse attributes JSON
+- Added subtypes() discovery method to ReferenceAPI
+- Verification tools: verify_subtype_fields.py, map_firds_actual_fields.py
+- 8 models cover 12.4M instruments (73% of 16.9M total FIRDS instruments)
+
+#### Database Initialization and Verification (2026-01-10)
+- Enhanced initialize() method with automatic schema verification
+- Verifies database structure matches data models on every initialization
+- Non-destructive: if database exists, verifies schema without reinitializing
+- verify_only parameter for explicit schema verification without modifications
+- Returns detailed status including tables created/verified and any errors
+- Checks for missing tables and columns against expected schema
+- Validates all 12 tables: instruments, listings, 9 asset-specific tables, metadata
+- Enhanced drop() method with safety confirmation requirement
+- Drop method now requires confirm=True parameter to prevent accidental data loss
+- Returns detailed status including file size and deletion confirmation
+- Properly closes database connections before deletion
+- Enhanced index_cached_files() method with filtering and selection options
+- New asset_type parameter to filter by specific asset type (C, D, E, F, H, I, J, O, R, S)
+- New latest_only parameter (default: True) to automatically select most recent files
+- New file_type parameter to choose FULINS (snapshots) or DLTINS (deltas)
+- Automatically detects and skips older file versions when latest_only=True
+- Returns detailed statistics: instruments, listings, files processed/skipped, asset types
+- Tools folder cleanup: Removed 9 temporary test/debug scripts
+- Kept 3 useful tools: analyze_field_coverage.py, display_database_schema.py, display_schemas.py
+- Added tools/README.md documenting purpose and usage of each tool
+- Updated documentation with clear workflow: Install → Initialize → Download → Load → Query
+- Database management section with verification, drop/rebuild, and update examples
+- New example scripts: 00_initialize_database.py, 01_drop_database.py, 02_index_with_filters.py
+
+#### ISO 10962 CFI Standard Compliance (2026-01-10)
+- Fixed config.py asset type descriptions to match ISO 10962 CFI categories
+- Corrected asset type names: H (Non-Standardized Derivatives), I (Spot), J (Forwards), O (Options), R (Entitlements)
+- Updated table name mappings to singular form following CFI standard
+- Ensures consistency with CFI classification implementation in models/utils/
+
+#### Listings Table Refactoring (2026-01-06)
+- **Breaking Change**: Separated trading venue listings into dedicated `listings` table
+- Normalized one-to-many relationship: one instrument can have multiple venue listings
+- Removed listing fields from all asset-specific tables: trading_venue_id, first_trade_date, termination_date, issuer_request
+- Asset tables now contain only asset-specific attributes
+- Auto-incrementing ID sequence for listings table
+- Listings table includes: admission_approval_date, request_for_admission_date
+- Database now has 12 tables: instruments, listings, 9 asset-specific tables, metadata
+- Properly handles ISINs with multiple venue listings (3.29M listings for 2.37M instruments)
+- Technical metadata fields (competent_authority, publication_date) remain in asset tables
+- Updated all 10 bulk inserters to remove listing field extraction/insertion
+- Updated all 10 schema table definitions to remove listing columns
+- Changed delete_csv default to False to support field coverage analysis
+- Tool cleanup: Removed outdated analyze_schema_coverage.py, test_firds_enhancements.py, inspect_firds_files.py
+- New tool: display_database_schema.py for inspecting actual DuckDB table structure
+- Field coverage analysis now shows 72.7% average coverage across all asset types
+
+#### Comprehensive Field Coverage Improvements (2026-01-05)
+- Added trading_venue_id extraction to all asset types (was only in swaps)
+- Added technical metadata fields to all asset types: issuer_request, competent_authority, publication_date
+- Enhanced debt instrument fields: maturity_date, total_issued_nominal_amount, nominal_value_per_unit, debt_seniority
+- Enhanced option instrument fields: option_type (CALL/PUT), option_exercise_style (AMER/EURO), strike_price
+- Updated all schema tables with new columns
+- Updated all bulk inserters with proper column pattern matching for RefData_ prefixed fields
+- Field coverage tool for analyzing data extraction quality
+
+#### Database Management Methods (2026-01-05)
+- Added db.initialize(mode) method: Initialize database with 'current' (FULINS) or 'delta' (DLTINS) mode
+- Added db.drop() method: Remove database and close connections
+- Added db.update(mode, from_date, to_date) method: Update database with new data (planned)
+- Separate listings table for trading venue data (one-to-many relationship with instruments)
+- Listings table removed from asset-specific schemas
+- Automatic DLTINS file exclusion during initial data load
+
 #### Reference API (2026-01-04)
 - Hierarchical reference API for convenient instrument queries
 - Callable interface: `edm.reference('ISIN')` for direct lookups
@@ -59,8 +184,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
-#### Storage Architecture (2025-01-03)
-- Expanded from 5 tables to 11 tables for complete asset type coverage
+#### Storage Architecture (2026-01-06)
+- Expanded from 5 tables to 12 tables for complete asset type coverage
+- Separate listings table for normalized one-to-many venue relationships
 - Enhanced debt instruments schema with floating rate fields
 - Enhanced futures schema with commodity product classifications
 - Options schema supports strike price variations (monetary, percentage, basis points)

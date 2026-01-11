@@ -228,3 +228,86 @@ class ReferenceAPI:
             GROUP BY instrument_type
             ORDER BY instrument_type
         """).fetchdf()
+    
+    def subtypes(self) -> pd.DataFrame:
+        """
+        Get all available subtype output models with their CFI prefixes.
+        
+        Returns:
+            DataFrame with columns: cfi_prefix, model_name, description, volume_estimate
+            
+        Example:
+            >>> import esma_dm as edm
+            >>> subtypes = edm.reference.subtypes()
+            >>> print(subtypes)
+            
+            cfi_prefix  model_name         description                    volume_estimate
+            SE          EquitySwap         Equity Total Return Swaps      1,138,694
+            HR          Swaption           Interest Rate Swaptions        956,107
+            HE          EquityOption       OTC Equity Options             559,533
+            RF          MiniFuture         Mini-Futures/Leverage Certs    4,466,144
+            ...
+        """
+        from .models.subtypes import SUBTYPE_MODELS
+        
+        # Define subtype information
+        subtype_info = {
+            'SE': {
+                'description': 'Equity Total Return Swaps',
+                'volume': 1138694,
+                'fields': 28
+            },
+            'HR': {
+                'description': 'Interest Rate Swaptions (Options on Swaps)',
+                'volume': 956107,
+                'fields': 38
+            },
+            'HE': {
+                'description': 'OTC Equity Options (Non-Standardized)',
+                'volume': 559533,
+                'fields': 33
+            },
+            'RF': {
+                'description': 'Mini-Futures / Constant Leverage Certificates',
+                'volume': 4466144,
+                'fields': 50
+            },
+            'EY': {
+                'description': 'Structured Equity Participation Certificates',
+                'volume': 771474,
+                'fields': 28
+            },
+            'DE': {
+                'description': 'Structured Debt without Capital Protection',
+                'volume': 939717,
+                'fields': 29
+            },
+            'FC': {
+                'description': 'Commodity Futures',
+                'volume': 28977,
+                'fields': 56
+            },
+            'JF': {
+                'description': 'Foreign Exchange Forwards',
+                'volume': 212732,
+                'fields': 22
+            },
+        }
+        
+        # Build DataFrame
+        data = []
+        for cfi_prefix, model_class in SUBTYPE_MODELS.items():
+            info = subtype_info.get(cfi_prefix, {})
+            data.append({
+                'cfi_prefix': cfi_prefix,
+                'model_name': model_class.__name__,
+                'description': info.get('description', 'Unknown'),
+                'volume_estimate': f"{info.get('volume', 0):,}",
+                'firds_fields': info.get('fields', 0)
+            })
+        
+        df = pd.DataFrame(data)
+        df = df.sort_values('volume_estimate', ascending=False, 
+                           key=lambda x: x.str.replace(',', '').astype(int))
+        
+        return df

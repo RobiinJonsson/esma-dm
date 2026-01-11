@@ -5,14 +5,20 @@ This module provides access to ESMA's FITRS dataset, which contains transparency
 data for financial instruments including pre-trade and post-trade information.
 """
 from datetime import datetime
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict
 from enum import Enum
+from pathlib import Path
 
 import pandas as pd
 import requests
 
 from ..utils import Utils
 from ..config import default_config
+from ..storage.fitrs_store import FITRSStorage
+from ..models.transparency_enums import (
+    Methodology, InstrumentClassification, FileType as FITRSFileType,
+    format_methodology_info, format_classification_info
+)
 
 
 class InstrumentType(Enum):
@@ -57,7 +63,8 @@ class FITRSClient:
         date_from: str = "2017-01-01",
         date_to: Optional[str] = None,
         limit: int = 10000,
-        config: Optional[Any] = None
+        config: Optional[Any] = None,
+        db_path: Optional[str] = None
     ):
         """
         Initialize FITRS client.
@@ -67,6 +74,7 @@ class FITRSClient:
             date_to: End date for filtering files (YYYY-MM-DD format, defaults to today)
             limit: Maximum number of records to fetch per request
             config: Optional custom configuration object
+            db_path: Path to fitrs.db database file
         """
         self.date_from = date_from
         self.date_to = date_to or datetime.today().strftime("%Y-%m-%d")
@@ -75,6 +83,9 @@ class FITRSClient:
         
         self.logger = Utils.set_logger("FITRSClient")
         self._utils = Utils()
+        
+        # Initialize database storage
+        self.data_store = FITRSStorage(db_path)
     
     def get_file_list(self) -> pd.DataFrame:
         """
@@ -311,3 +322,346 @@ class FITRSClient:
             data_type='fitrs',
             update=update
         )
+    
+    def index_transparency_data(
+        self,
+        file_type: str = 'FULECR',
+        asset_type: Optional[str] = None,
+        latest_only: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Download and index FITRS transparency data into database.
+        
+        Supports:
+        - FULECR: Equity ISIN-level full results
+        - FULNCR: Non-equity ISIN-level full results  
+        - DLTECR: Equity ISIN-level delta (incremental updates)
+        - DLTNCR: Non-equity ISIN-level delta (incremental updates)
+        - FULNCR_NYAR: Non-equity sub-class yearly results
+        - FULNCR_SISC: Non-equity sub-class SI results
+        
+        Args:
+            file_type: Type of files to index (FULECR, FULNCR, DLTECR, DLTNCR, FULNCR_NYAR, FULNCR_SISC)
+            asset_type: Optional asset type filter (for ISIN-level files)
+            latest_only: Only process latest files per asset type
+            
+        Returns:
+            Dictionary with processing statistics
+            
+        Example:
+            >>> fitrs = FITRSClient()
+            >>> # Index equity ISIN-level full results
+            >>> result = fitrs.index_transparency_data('FULECR')
+            >>> print(f"Indexed {result['total_instruments']} equity instruments")
+            >>> 
+            >>> # Index equity delta (incremental updates)
+            >>> result = fitrs.index_transparency_data('DLTECR', latest_only=True)
+            >>> 
+            >>> # Index non-equity sub-class yearly results
+            >>> result = fitrs.index_transparency_data('FULNCR_NYAR')
+        """
+        self.logger.info(f"Indexing {file_type} transparency data")
+        
+        # Determine if this is sub-class level data
+        is_subclass = file_type in ['FULNCR_NYAR', 'FULNCR_SISC']
+        
+        # Get file list
+        files = self.get_file_list()
+        
+        # Filter files by type
+        if is_subclass:
+            # Sub-class files: FULNCR_YYYYMMDD_NYAR_<AssetClass>_XofY.zip
+            files = files[files['file_name'].str.contains(file_type, na=False)]
+        else:
+            # ISIN-level files: FULECR_YYYYMMDD_<CFI>_XofY.zip
+            files = files[files['file_name'].str.contains(file_type, na=False)]
+        
+        # Apply asset type filter (only for ISIN-level)
+        if asset_type and not is_subclass:
+            files = files[files['file_name'].str.contains(f'_{asset_type}_', na=False)]
+        
+        if latest_only:
+            if is_subclass:
+                # Sub-class: FULNCR_YYYYMMDD_NYAR_<AssetClass>_XofY.zip
+                pattern = rf"{file_type}_(?P<date>\d{{8}})_(?P<asset>\w+)"
+            else:
+                # ISIN-level: FULECR_YYYYMMDD_E_XofY.zip or DLTECR_YYYYMMDD_E_XofY.zip
+                pattern = rf"{file_type}_(?P<date>\d{{8}})_(?P<asset>[A-Z])"
+            
+            extracted = files['file_name'].str.extract(pattern)
+            files['asset'] = extracted['asset']
+            files['date'] = extracted['date']
+            files = files[files['date'].notna()]  # Filter invalid matches
+            
+            if not files.empty:
+                files = files.sort_values('date').groupby('asset').tail(1)
+        
+        total_records = 0
+        files_processed = 0
+        
+        for _, file_row in files.iterrows():
+            try:
+                self.logger.info(f"Processing {file_row['file_name']}")
+                df = self.download_file(file_row['download_link'])
+                
+                if not df.empty:
+                    if is_subclass:
+                        # Insert into subclass_transparency table
+                        count = self.data_store.insert_subclass_transparency_data(df, file_type)
+                    else:
+                        # Insert into transparency table
+                        count = self.data_store.insert_transparency_data(df, file_type)
+                    
+                    total_records += count
+                    files_processed += 1
+                    self.logger.info(f"Inserted {count} records")
+                
+            except Exception as e:
+                self.logger.error(f"Error processing {file_row['file_name']}: {e}")
+                continue
+        
+        return {
+            'status': 'completed',
+            'files_processed': files_processed,
+            'total_records': total_records,
+            'file_type': file_type,
+            'is_subclass': is_subclass
+        }
+    
+    def transparency(self, isin: str) -> Optional[Dict[str, Any]]:
+        """
+        Get transparency data for an ISIN from database.
+        
+        Args:
+            isin: ISIN code
+            
+        Returns:
+            Dictionary with transparency metrics or None if not found
+            
+        Example:
+            >>> fitrs = FITRSClient()
+            >>> transparency = fitrs.transparency('GB00B1YW4409')
+            >>> print(transparency['liquid_market'])
+            >>> print(transparency['average_daily_turnover'])
+        """
+        return self.data_store.get_transparency(isin)
+    
+    def query_transparency(
+        self,
+        liquid_only: bool = False,
+        instrument_classification: Optional[str] = None,
+        instrument_type: Optional[str] = None,
+        min_turnover: Optional[float] = None,
+        most_relevant_market: Optional[str] = None,
+        methodology: Optional[str] = None,
+        limit: Optional[int] = None
+    ) -> pd.DataFrame:
+        """
+        Query ISIN-level transparency data with filters.
+        
+        Args:
+            liquid_only: Only return liquid instruments
+            instrument_classification: Filter by classification:
+                - SHRS: Shares (common/ordinary shares)
+                - DPRS: Depositary Receipts (ADRs, GDRs)
+                - ETFS: Exchange Traded Funds
+                - OTHR: Other equity instruments
+            instrument_type: Filter by type ('equity' or 'non_equity')
+            min_turnover: Minimum average daily turnover
+            most_relevant_market: Filter by most relevant market ID
+            methodology: Filter by methodology:
+                - SINT: Systematic Internaliser historical (discontinued April 2024)
+                - YEAR: Yearly methodology (12-month rolling)
+                - ESTM: Estimation methodology (insufficient data)
+                - FFWK: Framework methodology (illiquid pre-trade)
+            limit: Maximum number of results
+            
+        Returns:
+            DataFrame with transparency data
+            
+        Example:
+            >>> fitrs = FITRSClient()
+            >>> # Get liquid shares with high turnover
+            >>> liquid_shares = fitrs.query_transparency(
+            ...     liquid_only=True,
+            ...     instrument_classification='SHRS',
+            ...     min_turnover=1000000
+            ... )
+            >>> 
+            >>> # Get instruments calculated using yearly methodology
+            >>> yearly = fitrs.query_transparency(methodology='YEAR')
+        """
+        sql = "SELECT * FROM transparency WHERE 1=1"
+        params = []
+        
+        if liquid_only:
+            sql += " AND liquid_market = TRUE"
+        
+        if instrument_classification:
+            sql += " AND instrument_classification = ?"
+            params.append(instrument_classification)
+        
+        if instrument_type:
+            sql += " AND instrument_type = ?"
+            params.append(instrument_type)
+        
+        if min_turnover:
+            sql += " AND average_daily_turnover >= ?"
+            params.append(min_turnover)
+        
+        if most_relevant_market:
+            sql += " AND most_relevant_market_id = ?"
+            params.append(most_relevant_market)
+        
+        if methodology:
+            sql += " AND methodology = ?"
+            params.append(methodology)
+        
+        if limit:
+            sql += f" LIMIT {limit}"
+        
+        return self.data_store.query(sql, params if params else None)
+    
+    def query_subclass_transparency(
+        self,
+        asset_class: Optional[str] = None,
+        sub_asset_class_code: Optional[str] = None,
+        liquid_only: bool = False,
+        methodology: Optional[str] = None,
+        limit: Optional[int] = None
+    ) -> pd.DataFrame:
+        """
+        Query sub-class level transparency data with filters.
+        
+        Args:
+            asset_class: Asset class code (e.g., 'BOND', 'DERV')
+            sub_asset_class_code: Sub-asset class code
+            liquid_only: Only return liquid sub-classes
+            methodology: Filter by methodology (YEAR, ESTM, FFWK)
+            limit: Maximum number of results
+            
+        Returns:
+            DataFrame with sub-class transparency data
+            
+        Example:
+            >>> fitrs = FITRSClient()
+            >>> # Get liquid bond sub-classes
+            >>> liquid_bonds = fitrs.query_subclass_transparency(
+            ...     asset_class='BOND',
+            ...     liquid_only=True
+            ... )
+        """
+        sql = "SELECT * FROM subclass_transparency WHERE 1=1"
+        params = []
+        
+        if asset_class:
+            sql += " AND asset_class = ?"
+            params.append(asset_class)
+        
+        if sub_asset_class_code:
+            sql += " AND sub_asset_class_code = ?"
+            params.append(sub_asset_class_code)
+        
+        if liquid_only:
+            sql += " AND liquid_market = TRUE"
+        
+        if methodology:
+            sql += " AND methodology = ?"
+            params.append(methodology)
+        
+        if limit:
+            sql += f" LIMIT {limit}"
+        
+        return self.data_store.query(sql, params if params else None)
+    
+    @staticmethod
+    def get_methodology_info(code: str) -> dict:
+        """
+        Get detailed information about a methodology code.
+        
+        Args:
+            code: Methodology code (SINT, YEAR, ESTM, FFWK)
+            
+        Returns:
+            Dictionary with code, description, and validity
+            
+        Example:
+            >>> fitrs = FITRSClient()
+            >>> info = fitrs.get_methodology_info('YEAR')
+            >>> print(info['description'])
+            'Yearly methodology (12-month rolling period)'
+        """
+        return format_methodology_info(code)
+    
+    @staticmethod
+    def get_classification_info(code: str) -> dict:
+        """
+        Get detailed information about an instrument classification code.
+        
+        Args:
+            code: Classification code (SHRS, DPRS, ETFS, OTHR)
+            
+        Returns:
+            Dictionary with code, description, and validity
+            
+        Example:
+            >>> fitrs = FITRSClient()
+            >>> info = fitrs.get_classification_info('SHRS')
+            >>> print(info['description'])
+            'Shares (common/ordinary shares)'
+        """
+        return format_classification_info(code)
+    
+    @staticmethod
+    def list_methodologies() -> list:
+        """
+        Get list of all available methodology codes with descriptions.
+        
+        Returns:
+            List of dictionaries with code and description
+            
+        Example:
+            >>> fitrs = FITRSClient()
+            >>> for m in fitrs.list_methodologies():
+            ...     print(f"{m['code']}: {m['description']}")
+        """
+        return [
+            {'code': m.name, 'description': m.value}
+            for m in Methodology
+        ]
+    
+    @staticmethod
+    def list_classifications() -> list:
+        """
+        Get list of all instrument classification codes with descriptions.
+        
+        Returns:
+            List of dictionaries with code and description
+            
+        Example:
+            >>> fitrs = FITRSClient()
+            >>> for c in fitrs.list_classifications():
+            ...     print(f"{c['code']}: {c['description']}")
+        """
+        return [
+            {'code': c.name, 'description': c.value}
+            for c in InstrumentClassification
+        ]
+    
+    @staticmethod
+    def list_file_types() -> list:
+        """
+        Get list of all FITRS file types with descriptions.
+        
+        Returns:
+            List of dictionaries with code and description
+            
+        Example:
+            >>> fitrs = FITRSClient()
+            >>> for ft in fitrs.list_file_types():
+            ...     print(f"{ft['code']}: {ft['description']}")
+        """
+        return [
+            {'code': ft.name, 'description': ft.value}
+            for ft in FITRSFileType
+        ]

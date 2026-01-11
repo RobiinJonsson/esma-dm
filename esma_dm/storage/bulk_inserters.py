@@ -31,9 +31,8 @@ class BulkInserter:
         ownership_col = self._find_column(df, ['OwnrshpRstrctn', 'ownership_restriction'])
         redemption_col = self._find_column(df, ['RdmptnTp', 'redemption_type'])
         capital_col = self._find_column(df, ['CptlInvstmntRstrctn', 'capital_restriction'])
-        venue_col = self._find_column(df, ['TradgVnId', 'trading_venue_id'])
-        first_trade_col = self._find_column(df, ['FrstTradDt', 'first_trade_date'])
-        term_col = self._find_column(df, ['TermntnDt', 'termination_date'])
+        competent_auth_col = self._find_column(df, ['RefData_TechAttrbts_RlvntCmptntAuthrty', 'TechAttrbts_RlvntCmptntAuthrty'])
+        publication_date_col = self._find_column(df, ['RefData_TechAttrbts_PblctnPrd_FrDt', 'TechAttrbts_PblctnPrd_FrDt'])
         
         equity_df = pd.DataFrame({
             'isin': df[isin_col] if isin_col else None,
@@ -43,9 +42,8 @@ class BulkInserter:
             'ownership_restriction': df[ownership_col] if ownership_col else None,
             'redemption_type': df[redemption_col] if redemption_col else None,
             'capital_investment_restriction': df[capital_col] if capital_col else None,
-            'trading_venue_id': df[venue_col] if venue_col else None,
-            'first_trade_date': pd.to_datetime(df[first_trade_col], errors='coerce') if first_trade_col else None,
-            'termination_date': pd.to_datetime(df[term_col], errors='coerce') if term_col else None
+            'competent_authority': df[competent_auth_col] if competent_auth_col else None,
+            'publication_date': pd.to_datetime(df[publication_date_col], errors='coerce') if publication_date_col else None
         })
         
         equity_df = equity_df.dropna(subset=['isin'])
@@ -61,29 +59,27 @@ class BulkInserter:
                     ownership_restriction = EXCLUDED.ownership_restriction,
                     redemption_type = EXCLUDED.redemption_type,
                     capital_investment_restriction = EXCLUDED.capital_investment_restriction,
-                    trading_venue_id = EXCLUDED.trading_venue_id,
-                    first_trade_date = EXCLUDED.first_trade_date,
-                    termination_date = EXCLUDED.termination_date
+                    competent_authority = EXCLUDED.competent_authority,
+                    publication_date = EXCLUDED.publication_date
             """)
     
     def insert_debt(self, df: pd.DataFrame):
         """Bulk insert debt instruments (D)."""
         isin_col = self._find_column(df, ['Id', 'ISIN'])
         short_name_col = self._find_column(df, ['ShrtNm', 'short_name'])
-        maturity_col = self._find_column(df, ['MtrtyDt', 'maturity_date'])
-        total_issued_col = self._find_column(df, ['TtlIssdNmnlAmt', 'total_issued_nominal'])
-        nominal_col = self._find_column(df, ['MnmNmnlQt', 'NmnlValPerUnit', 'nominal_value'])
-        fixed_rate_col = self._find_column(df, ['IntrstRate_Fxd', 'fixed_rate'])
+        maturity_col = self._find_column(df, ['RefData_DebtInstrmAttrbts_MtrtyDt', 'DebtInstrmAttrbts_MtrtyDt', 'MtrtyDt', 'maturity_date'])
+        total_issued_col = self._find_column(df, ['RefData_DebtInstrmAttrbts_TtlIssdNmnlAmt', 'DebtInstrmAttrbts_TtlIssdNmnlAmt', 'TtlIssdNmnlAmt', 'total_issued_nominal'])
+        nominal_col = self._find_column(df, ['RefData_DebtInstrmAttrbts_NmnlValPerUnit', 'DebtInstrmAttrbts_NmnlValPerUnit', 'MnmNmnlQt', 'NmnlValPerUnit', 'nominal_value'])
+        fixed_rate_col = self._find_column(df, ['RefData_DebtInstrmAttrbts_IntrstRate_Fxd', 'DebtInstrmAttrbts_IntrstRate_Fxd', 'IntrstRate_Fxd', 'fixed_rate'])
         float_ref_col = self._find_column(df, ['IntrstRate_Fltg_RefRate_Nm', 'floating_rate_reference'])
         float_idx_col = self._find_column(df, ['IntrstRate_Fltg_RefRate_Indx', 'floating_rate_index'])
         float_term_unit_col = self._find_column(df, ['IntrstRate_Fltg_Term_Unit'])
         float_term_val_col = self._find_column(df, ['IntrstRate_Fltg_Term_Val'])
         float_spread_col = self._find_column(df, ['IntrstRate_Fltg_BsisPtSprd'])
-        seniority_col = self._find_column(df, ['DebtSnrty', 'debt_seniority'])
+        seniority_col = self._find_column(df, ['RefData_DebtInstrmAttrbts_DebtSnrty', 'DebtInstrmAttrbts_DebtSnrty', 'DebtSnrty', 'debt_seniority'])
         delivery_col = self._find_column(df, ['DlvryTp', 'delivery_type'])
-        venue_col = self._find_column(df, ['TradgVnId', 'trading_venue_id'])
-        first_trade_col = self._find_column(df, ['FrstTradDt', 'first_trade_date'])
-        term_col = self._find_column(df, ['TermntnDt', 'termination_date'])
+        competent_auth_col = self._find_column(df, ['RefData_TechAttrbts_RlvntCmptntAuthrty', 'TechAttrbts_RlvntCmptntAuthrty'])
+        publication_date_col = self._find_column(df, ['RefData_TechAttrbts_PblctnPrd_FrDt', 'TechAttrbts_PblctnPrd_FrDt'])
         
         debt_df = pd.DataFrame({
             'isin': df[isin_col] if isin_col else None,
@@ -100,9 +96,8 @@ class BulkInserter:
             'floating_rate_basis_spread': pd.to_numeric(df[float_spread_col], errors='coerce') if float_spread_col else None,
             'debt_seniority': df[seniority_col] if seniority_col else None,
             'delivery_type': df[delivery_col] if delivery_col else None,
-            'trading_venue_id': df[venue_col] if venue_col else None,
-            'first_trade_date': pd.to_datetime(df[first_trade_col], errors='coerce') if first_trade_col else None,
-            'termination_date': pd.to_datetime(df[term_col], errors='coerce') if term_col else None
+            'competent_authority': df[competent_auth_col] if competent_auth_col else None,
+            'publication_date': pd.to_datetime(df[publication_date_col], errors='coerce') if publication_date_col else None
         })
         
         debt_df = debt_df.dropna(subset=['isin'])
@@ -125,9 +120,8 @@ class BulkInserter:
                     floating_rate_basis_spread = EXCLUDED.floating_rate_basis_spread,
                     debt_seniority = EXCLUDED.debt_seniority,
                     delivery_type = EXCLUDED.delivery_type,
-                    trading_venue_id = EXCLUDED.trading_venue_id,
-                    first_trade_date = EXCLUDED.first_trade_date,
-                    termination_date = EXCLUDED.termination_date
+                    competent_authority = EXCLUDED.competent_authority,
+                    publication_date = EXCLUDED.publication_date
             """)
     
     def insert_futures(self, df: pd.DataFrame):
@@ -142,9 +136,8 @@ class BulkInserter:
         base_product_col = self._find_column(df, ['Cmmdty_Pdct', 'BasePdct'])
         sub_product_col = self._find_column(df, ['SubPdct'])
         addtl_sub_product_col = self._find_column(df, ['AddtlSubPdct'])
-        venue_col = self._find_column(df, ['TradgVnId', 'trading_venue_id'])
-        first_trade_col = self._find_column(df, ['FrstTradDt', 'first_trade_date'])
-        term_col = self._find_column(df, ['TermntnDt', 'termination_date'])
+        competent_auth_col = self._find_column(df, ['RefData_TechAttrbts_RlvntCmptntAuthrty', 'TechAttrbts_RlvntCmptntAuthrty'])
+        publication_date_col = self._find_column(df, ['RefData_TechAttrbts_PblctnPrd_FrDt', 'TechAttrbts_PblctnPrd_FrDt'])
         
         futures_df = pd.DataFrame({
             'isin': df[isin_col] if isin_col else None,
@@ -157,9 +150,8 @@ class BulkInserter:
             'commodity_base_product': df[base_product_col] if base_product_col else None,
             'commodity_sub_product': df[sub_product_col] if sub_product_col else None,
             'commodity_additional_sub_product': df[addtl_sub_product_col] if addtl_sub_product_col else None,
-            'trading_venue_id': df[venue_col] if venue_col else None,
-            'first_trade_date': pd.to_datetime(df[first_trade_col], errors='coerce') if first_trade_col else None,
-            'termination_date': pd.to_datetime(df[term_col], errors='coerce') if term_col else None
+            'competent_authority': df[competent_auth_col] if competent_auth_col else None,
+            'publication_date': pd.to_datetime(df[publication_date_col], errors='coerce') if publication_date_col else None
         })
         
         futures_df = futures_df.dropna(subset=['isin'])
@@ -178,13 +170,12 @@ class BulkInserter:
                     commodity_base_product = EXCLUDED.commodity_base_product,
                     commodity_sub_product = EXCLUDED.commodity_sub_product,
                     commodity_additional_sub_product = EXCLUDED.commodity_additional_sub_product,
-                    trading_venue_id = EXCLUDED.trading_venue_id,
-                    first_trade_date = EXCLUDED.first_trade_date,
-                    termination_date = EXCLUDED.termination_date
+                    competent_authority = EXCLUDED.competent_authority,
+                    publication_date = EXCLUDED.publication_date
             """)
     
     def insert_options(self, df: pd.DataFrame):
-        """Bulk insert option instruments (O, H)."""
+        """Bulk insert option instruments (O, H).""" 
         isin_col = self._find_column(df, ['Id', 'ISIN'])
         short_name_col = self._find_column(df, ['ShrtNm', 'short_name'])
         expiry_col = self._find_column(df, ['XpryDt', 'expiry_date'])
@@ -192,18 +183,17 @@ class BulkInserter:
         underlying_isin_col = self._find_column(df, ['UndrlygInstrm_Sngl_ISIN'])
         underlying_index_isin_col = self._find_column(df, ['UndrlygInstrm_Sngl_Indx_ISIN'])
         underlying_index_name_col = self._find_column(df, ['UndrlygInstrm_Sngl_Indx_Nm'])
-        option_type_col = self._find_column(df, ['OptnTp', 'option_type'])
-        exercise_style_col = self._find_column(df, ['OptnExrcStyle', 'exercise_style'])
-        strike_price_col = self._find_column(df, ['StrkPric_Pric_MntryVal_Amt'])
+        option_type_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_OptnTp', 'DerivInstrmAttrbts_OptnTp', 'OptnTp', 'option_type'])
+        exercise_style_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_OptnExrcStyle', 'DerivInstrmAttrbts_OptnExrcStyle', 'OptnExrcStyle', 'exercise_style'])
+        strike_price_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_StrkPric_Pric_MntryVal_Amt', 'DerivInstrmAttrbts_StrkPric_Pric_MntryVal_Amt', 'StrkPric_Pric_MntryVal_Amt'])
         strike_pct_col = self._find_column(df, ['StrkPric_Pric_Pctg'])
         strike_bp_col = self._find_column(df, ['StrkPric_Pric_BsisPts'])
         strike_ccy_col = self._find_column(df, ['StrkPric_NoPric_Ccy'])
         delivery_col = self._find_column(df, ['DlvryTp', 'delivery_type'])
         fx_type_col = self._find_column(df, ['FX_FxTp'])
         other_ccy_col = self._find_column(df, ['FX_OthrNtnlCcy'])
-        venue_col = self._find_column(df, ['TradgVnId', 'trading_venue_id'])
-        first_trade_col = self._find_column(df, ['FrstTradDt', 'first_trade_date'])
-        term_col = self._find_column(df, ['TermntnDt', 'termination_date'])
+        competent_auth_col = self._find_column(df, ['RefData_TechAttrbts_RlvntCmptntAuthrty', 'TechAttrbts_RlvntCmptntAuthrty'])
+        publication_date_col = self._find_column(df, ['RefData_TechAttrbts_PblctnPrd_FrDt', 'TechAttrbts_PblctnPrd_FrDt'])
         
         option_df = pd.DataFrame({
             'isin': df[isin_col] if isin_col else None,
@@ -222,9 +212,8 @@ class BulkInserter:
             'delivery_type': df[delivery_col] if delivery_col else None,
             'fx_type': df[fx_type_col] if fx_type_col else None,
             'other_notional_currency': df[other_ccy_col] if other_ccy_col else None,
-            'trading_venue_id': df[venue_col] if venue_col else None,
-            'first_trade_date': pd.to_datetime(df[first_trade_col], errors='coerce') if first_trade_col else None,
-            'termination_date': pd.to_datetime(df[term_col], errors='coerce') if term_col else None
+            'competent_authority': df[competent_auth_col] if competent_auth_col else None,
+            'publication_date': pd.to_datetime(df[publication_date_col], errors='coerce') if publication_date_col else None
         })
         
         option_df = option_df.dropna(subset=['isin'])
@@ -249,9 +238,8 @@ class BulkInserter:
                     delivery_type = EXCLUDED.delivery_type,
                     fx_type = EXCLUDED.fx_type,
                     other_notional_currency = EXCLUDED.other_notional_currency,
-                    trading_venue_id = EXCLUDED.trading_venue_id,
-                    first_trade_date = EXCLUDED.first_trade_date,
-                    termination_date = EXCLUDED.termination_date
+                    competent_authority = EXCLUDED.competent_authority,
+                    publication_date = EXCLUDED.publication_date
             """)
     
     def insert_swaps(self, df: pd.DataFrame):
@@ -272,9 +260,8 @@ class BulkInserter:
         ir_term_unit_col = self._find_column(df, ['AsstClssSpcfcAttrbts_Intrst_IntrstRate_Term_Unit', 'IntrstRate_Trm_Unit'])
         ir_term_value_col = self._find_column(df, ['AsstClssSpcfcAttrbts_Intrst_IntrstRate_Term_Val', 'IntrstRate_Trm_Val'])
         fx_other_ccy_col = self._find_column(df, ['AsstClssSpcfcAttrbts_FX_OthrNtnlCcy', 'FX_OthrNtnlCcy'])
-        venue_col = self._find_column(df, ['TradgVnRltdAttrbts_Id', 'TradgVnId', 'trading_venue_id'])
-        first_trade_col = self._find_column(df, ['TradgVnRltdAttrbts_FrstTradDt', 'FrstTradDt', 'first_trade_date'])
-        term_col = self._find_column(df, ['TradgVnRltdAttrbts_TermntnDt', 'TermntnDt', 'termination_date'])
+        competent_auth_col = self._find_column(df, ['RefData_TechAttrbts_RlvntCmptntAuthrty', 'TechAttrbts_RlvntCmptntAuthrty'])
+        publication_date_col = self._find_column(df, ['RefData_TechAttrbts_PblctnPrd_FrDt', 'TechAttrbts_PblctnPrd_FrDt'])
         
         swap_df = pd.DataFrame({
             'isin': df[isin_col] if isin_col else None,
@@ -293,9 +280,8 @@ class BulkInserter:
             'interest_rate_term_unit': df[ir_term_unit_col] if ir_term_unit_col else None,
             'interest_rate_term_value': df[ir_term_value_col] if ir_term_value_col else None,
             'fx_other_notional_currency': df[fx_other_ccy_col] if fx_other_ccy_col else None,
-            'trading_venue_id': df[venue_col] if venue_col else None,
-            'first_trade_date': pd.to_datetime(df[first_trade_col], errors='coerce') if first_trade_col else None,
-            'termination_date': pd.to_datetime(df[term_col], errors='coerce') if term_col else None
+            'competent_authority': df[competent_auth_col] if competent_auth_col else None,
+            'publication_date': pd.to_datetime(df[publication_date_col], errors='coerce') if publication_date_col else None
         })
         
         swap_df = swap_df.dropna(subset=['isin'])
@@ -320,9 +306,8 @@ class BulkInserter:
                     interest_rate_term_unit = EXCLUDED.interest_rate_term_unit,
                     interest_rate_term_value = EXCLUDED.interest_rate_term_value,
                     fx_other_notional_currency = EXCLUDED.fx_other_notional_currency,
-                    trading_venue_id = EXCLUDED.trading_venue_id,
-                    first_trade_date = EXCLUDED.first_trade_date,
-                    termination_date = EXCLUDED.termination_date
+                    competent_authority = EXCLUDED.competent_authority,
+                    publication_date = EXCLUDED.publication_date
             """)
     
     def insert_forwards(self, df: pd.DataFrame):
@@ -341,9 +326,8 @@ class BulkInserter:
         commodity_base_col = self._find_column(df, ['Cmmdty_BasePdct'])
         commodity_sub_col = self._find_column(df, ['Cmmdty_SubPdct'])
         commodity_add_col = self._find_column(df, ['Cmmdty_AddtlSubPdct'])
-        venue_col = self._find_column(df, ['TradgVnId', 'trading_venue_id'])
-        first_trade_col = self._find_column(df, ['FrstTradDt', 'first_trade_date'])
-        term_col = self._find_column(df, ['TermntnDt', 'termination_date'])
+        competent_auth_col = self._find_column(df, ['RefData_TechAttrbts_RlvntCmptntAuthrty', 'TechAttrbts_RlvntCmptntAuthrty'])
+        publication_date_col = self._find_column(df, ['RefData_TechAttrbts_PblctnPrd_FrDt', 'TechAttrbts_PblctnPrd_FrDt'])
         
         forward_df = pd.DataFrame({
             'isin': df[isin_col] if isin_col else None,
@@ -360,9 +344,8 @@ class BulkInserter:
             'commodity_base_product': df[commodity_base_col] if commodity_base_col else None,
             'commodity_sub_product': df[commodity_sub_col] if commodity_sub_col else None,
             'commodity_additional_sub_product': df[commodity_add_col] if commodity_add_col else None,
-            'trading_venue_id': df[venue_col] if venue_col else None,
-            'first_trade_date': pd.to_datetime(df[first_trade_col], errors='coerce') if first_trade_col else None,
-            'termination_date': pd.to_datetime(df[term_col], errors='coerce') if term_col else None
+            'competent_authority': df[competent_auth_col] if competent_auth_col else None,
+            'publication_date': pd.to_datetime(df[publication_date_col], errors='coerce') if publication_date_col else None
         })
         
         forward_df = forward_df.dropna(subset=['isin'])
@@ -385,9 +368,8 @@ class BulkInserter:
                     commodity_base_product = EXCLUDED.commodity_base_product,
                     commodity_sub_product = EXCLUDED.commodity_sub_product,
                     commodity_additional_sub_product = EXCLUDED.commodity_additional_sub_product,
-                    trading_venue_id = EXCLUDED.trading_venue_id,
-                    first_trade_date = EXCLUDED.first_trade_date,
-                    termination_date = EXCLUDED.termination_date
+                    competent_authority = EXCLUDED.competent_authority,
+                    publication_date = EXCLUDED.publication_date
             """)
     
     def insert_rights(self, df: pd.DataFrame):
@@ -411,9 +393,8 @@ class BulkInserter:
         commodity_add_col = self._find_column(df, ['Cmmdty_AddtlSubPdct'])
         fx_type_col = self._find_column(df, ['FX_FxTp'])
         fx_other_ccy_col = self._find_column(df, ['FX_OthrNtnlCcy'])
-        venue_col = self._find_column(df, ['TradgVnId', 'trading_venue_id'])
-        first_trade_col = self._find_column(df, ['FrstTradDt', 'first_trade_date'])
-        term_col = self._find_column(df, ['TermntnDt', 'termination_date'])
+        competent_auth_col = self._find_column(df, ['RefData_TechAttrbts_RlvntCmptntAuthrty', 'TechAttrbts_RlvntCmptntAuthrty'])
+        publication_date_col = self._find_column(df, ['RefData_TechAttrbts_PblctnPrd_FrDt', 'TechAttrbts_PblctnPrd_FrDt'])
         
         rights_df = pd.DataFrame({
             'isin': df[isin_col] if isin_col else None,
@@ -435,9 +416,8 @@ class BulkInserter:
             'commodity_additional_sub_product': df[commodity_add_col] if commodity_add_col else None,
             'fx_type': df[fx_type_col] if fx_type_col else None,
             'fx_other_notional_currency': df[fx_other_ccy_col] if fx_other_ccy_col else None,
-            'trading_venue_id': df[venue_col] if venue_col else None,
-            'first_trade_date': pd.to_datetime(df[first_trade_col], errors='coerce') if first_trade_col else None,
-            'termination_date': pd.to_datetime(df[term_col], errors='coerce') if term_col else None
+            'competent_authority': df[competent_auth_col] if competent_auth_col else None,
+            'publication_date': pd.to_datetime(df[publication_date_col], errors='coerce') if publication_date_col else None
         })
         
         rights_df = rights_df.dropna(subset=['isin'])
@@ -465,9 +445,8 @@ class BulkInserter:
                     commodity_additional_sub_product = EXCLUDED.commodity_additional_sub_product,
                     fx_type = EXCLUDED.fx_type,
                     fx_other_notional_currency = EXCLUDED.fx_other_notional_currency,
-                    trading_venue_id = EXCLUDED.trading_venue_id,
-                    first_trade_date = EXCLUDED.first_trade_date,
-                    termination_date = EXCLUDED.termination_date
+                    competent_authority = EXCLUDED.competent_authority,
+                    publication_date = EXCLUDED.publication_date
             """)
     
     def insert_civs(self, df: pd.DataFrame):
@@ -475,17 +454,15 @@ class BulkInserter:
         isin_col = self._find_column(df, ['Id', 'ISIN'])
         short_name_col = self._find_column(df, ['ShrtNm', 'short_name'])
         underlying_isin_col = self._find_column(df, ['UndrlygInstrm_Sngl_ISIN'])
-        venue_col = self._find_column(df, ['TradgVnId', 'trading_venue_id'])
-        first_trade_col = self._find_column(df, ['FrstTradDt', 'first_trade_date'])
-        term_col = self._find_column(df, ['TermntnDt', 'termination_date'])
+        competent_auth_col = self._find_column(df, ['RefData_TechAttrbts_RlvntCmptntAuthrty', 'TechAttrbts_RlvntCmptntAuthrty'])
+        publication_date_col = self._find_column(df, ['RefData_TechAttrbts_PblctnPrd_FrDt', 'TechAttrbts_PblctnPrd_FrDt'])
         
         civ_df = pd.DataFrame({
             'isin': df[isin_col] if isin_col else None,
             'short_name': df[short_name_col] if short_name_col else None,
             'underlying_isin': df[underlying_isin_col] if underlying_isin_col else None,
-            'trading_venue_id': df[venue_col] if venue_col else None,
-            'first_trade_date': pd.to_datetime(df[first_trade_col], errors='coerce') if first_trade_col else None,
-            'termination_date': pd.to_datetime(df[term_col], errors='coerce') if term_col else None
+            'competent_authority': df[competent_auth_col] if competent_auth_col else None,
+            'publication_date': pd.to_datetime(df[publication_date_col], errors='coerce') if publication_date_col else None
         })
         
         civ_df = civ_df.dropna(subset=['isin'])
@@ -497,9 +474,8 @@ class BulkInserter:
                 ON CONFLICT (isin) DO UPDATE SET
                     short_name = EXCLUDED.short_name,
                     underlying_isin = EXCLUDED.underlying_isin,
-                    trading_venue_id = EXCLUDED.trading_venue_id,
-                    first_trade_date = EXCLUDED.first_trade_date,
-                    termination_date = EXCLUDED.termination_date
+                    competent_authority = EXCLUDED.competent_authority,
+                    publication_date = EXCLUDED.publication_date
             """)
     
     def insert_spots(self, df: pd.DataFrame):
@@ -511,9 +487,8 @@ class BulkInserter:
         commodity_add_col = self._find_column(df, ['Cmmdty_AddtlSubPdct'])
         transaction_type_col = self._find_column(df, ['Cmmdty_TxTp'])
         price_type_col = self._find_column(df, ['Cmmdty_FnlPricTp'])
-        venue_col = self._find_column(df, ['TradgVnId', 'trading_venue_id'])
-        first_trade_col = self._find_column(df, ['FrstTradDt', 'first_trade_date'])
-        term_col = self._find_column(df, ['TermntnDt', 'termination_date'])
+        competent_auth_col = self._find_column(df, ['RefData_TechAttrbts_RlvntCmptntAuthrty', 'TechAttrbts_RlvntCmptntAuthrty'])
+        publication_date_col = self._find_column(df, ['RefData_TechAttrbts_PblctnPrd_FrDt', 'TechAttrbts_PblctnPrd_FrDt'])
         
         spot_df = pd.DataFrame({
             'isin': df[isin_col] if isin_col else None,
@@ -523,9 +498,8 @@ class BulkInserter:
             'commodity_additional_sub_product': df[commodity_add_col] if commodity_add_col else None,
             'transaction_type': df[transaction_type_col] if transaction_type_col else None,
             'final_price_type': df[price_type_col] if price_type_col else None,
-            'trading_venue_id': df[venue_col] if venue_col else None,
-            'first_trade_date': pd.to_datetime(df[first_trade_col], errors='coerce') if first_trade_col else None,
-            'termination_date': pd.to_datetime(df[term_col], errors='coerce') if term_col else None
+            'competent_authority': df[competent_auth_col] if competent_auth_col else None,
+            'publication_date': pd.to_datetime(df[publication_date_col], errors='coerce') if publication_date_col else None
         })
         
         spot_df = spot_df.dropna(subset=['isin'])
@@ -541,8 +515,7 @@ class BulkInserter:
                     commodity_additional_sub_product = EXCLUDED.commodity_additional_sub_product,
                     transaction_type = EXCLUDED.transaction_type,
                     final_price_type = EXCLUDED.final_price_type,
-                    trading_venue_id = EXCLUDED.trading_venue_id,
-                    first_trade_date = EXCLUDED.first_trade_date,
-                    termination_date = EXCLUDED.termination_date
+                    competent_authority = EXCLUDED.competent_authority,
+                    publication_date = EXCLUDED.publication_date
             """)
 

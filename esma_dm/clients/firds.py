@@ -251,8 +251,8 @@ class FIRDSClient:
         
         if asset_type:
             asset_type_upper = asset_type.upper()
-            pattern = rf"{file_type or '[A-Z]+'}_{{asset_type_upper}}_"
-            df = df[df['file_name'].str.match(pattern, na=False)]
+            pattern = rf"_{asset_type_upper}_"
+            df = df[df['file_name'].str.contains(pattern, na=False)]
         
         return df
     
@@ -644,39 +644,256 @@ class FIRDSClient:
         
         return True
     
-    def index_cached_files(self, delete_csv: bool = True) -> Dict:
+    def index_cached_files(
+        self,
+        asset_type: Optional[str] = None,
+        latest_only: bool = True,
+        file_type: str = 'FULINS',
+        delete_csv: bool = False
+    ) -> Dict:
         """
-        Index all downloaded CSV files into the JSON data store.
+        Index downloaded CSV files into the database.
         
-        Parses CSV files using instrument data models (Equity, Debt, Derivative)
-        and stores normalized data in JSON format for fast lookups. Optionally
-        deletes CSV files after successful indexing to save disk space.
+        Loads FIRDS data from cached CSV files into DuckDB. Supports filtering by
+        asset type and automatically selecting latest files when multiple versions exist.
         
         Args:
-            delete_csv: Delete CSV files after successful indexing (default True)
+            asset_type: Filter by asset type (C, D, E, F, H, I, J, O, R, S) or None for all
+            latest_only: If True, only index the most recent files for each asset type (default: True)
+            file_type: Filter by file type - 'FULINS' for snapshots (default), 'DLTINS' for deltas
+            delete_csv: Delete CSV files after successful indexing (default: False)
         
         Returns:
-            Dictionary with indexing statistics
+            Dictionary with indexing statistics including:
+            - total_instruments: Total instruments indexed
+            - total_listings: Total venue listings indexed
+            - files_processed: Number of files processed
+            - files_skipped: Number of files skipped
+            - failed_files: List of files that failed to index
+            - asset_types_processed: List of asset types that were indexed
         
         Example:
             >>> firds = FIRDSClient()
+            >>> 
+            >>> # Index all latest FULINS files
+            >>> stats = firds.index_cached_files()
+            >>> 
+            >>> # Index only equities
+            >>> stats = firds.index_cached_files(asset_type='E')
+            >>> 
+            >>> # Index all equity files (not just latest)
+            >>> stats = firds.index_cached_files(asset_type='E', latest_only=False)
+            >>> 
+            >>> # Index and delete CSV files
             >>> stats = firds.index_cached_files(delete_csv=True)
-            >>> print(f"Indexed {stats['files_processed']} files")
-            >>> print(f"Total instruments: {stats['total_instruments']}")
         """
         cache_dir = self.config.downloads_path / 'firds'
         cache_dir.mkdir(parents=True, exist_ok=True)
         
-        self.logger.info("Indexing all cached CSV files...")
-        results = self.data_store.index_all_csv_files(cache_dir, delete_csv=delete_csv)
+        # Build file pattern based on filters
+        if asset_type:
+            # Validate asset type
+            valid_types = ['C', 'D', 'E', 'F', 'H', 'I', 'J', 'O', 'R', 'S']
+            if asset_type not in valid_types:
+                raise ValueError(f"Invalid asset_type: {asset_type}. Must be one of {valid_types}")
+            pattern = f"{file_type}_{asset_type}_*_data.csv"
+        else:
+            pattern = f"{file_type}_*_data.csv"
         
-        self.logger.info(f"Indexed {results['files_processed']} files")
-        self.logger.info(f"Total instruments: {results['total_instruments']}")
+        self.logger.info(f"Scanning for files matching pattern: {pattern}")
+        csv_files = sorted(cache_dir.glob(pattern))
         
-        if results.get('failed_files'):
-            self.logger.warning(f"Failed to index {len(results['failed_files'])} files")
+        if not csv_files:
+            self.logger.warning(f"No files found matching pattern: {pattern}")
+            return {
+                'total_instruments': 0,
+                'total_listings': 0,
+                'files_processed': 0,
+                'files_skipped': 0,
+                'failed_files': [],
+                'asset_types_processed': []
+            }
         
-        return results
+        self.logger.info(f"Found {len(csv_files)} files matching pattern")
+        
+        # If latest_only, filter to most recent file per asset type
+        files_to_process = csv_files
+        files_skipped = 0
+        
+        if latest_only:
+            from collections import defaultdict
+            
+            # Group files by asset type
+            files_by_type = defaultdict(list)
+            for f in csv_files:
+                # Extract asset type from filename (e.g., FULINS_E_20260103_...)
+                parts = f.name.split('_')
+                if len(parts) >= 3:
+                    atype = parts[1]  # Second part is asset type
+                    files_by_type[atype].append(f)
+            
+            # Keep only the latest file per asset type (by filename, which includes date)
+            files_to_process = []
+            for atype, files in files_by_type.items():
+                latest = max(files, key=lambda f: f.name)  # Latest by filename sort
+                files_to_process.append(latest)
+                files_skipped += len(files) - 1
+                if len(files) > 1:
+                    self.logger.info(f"Asset type {atype}: using latest file {latest.name} (skipped {len(files)-1} older files)")
+            
+            files_to_process = sorted(files_to_process)
+            self.logger.info(f"After latest_only filter: {len(files_to_process)} files to process, {files_skipped} skipped")
+        
+        # Index selected files
+        total_instruments = 0
+        total_listings = 0
+        files_processed = 0
+        failed_files = []
+        asset_types_processed = set()
+        
+        for i, csv_file in enumerate(files_to_process, 1):
+            try:
+                self.logger.info(f"[{i}/{len(files_to_process)}] Indexing {csv_file.name}")
+                
+                # index_csv_file returns int (instrument count)
+                count = self.data_store.index_csv_file(csv_file)
+                
+                total_instruments += count
+                files_processed += 1
+                
+                # Extract asset type from filename
+                parts = csv_file.name.split('_')
+                if len(parts) >= 2:
+                    asset_types_processed.add(parts[1])
+                
+                # Get listings count from database
+                try:
+                    listings_count = self.data_store.con.execute(
+                        "SELECT COUNT(*) FROM listings WHERE source_file = ?", 
+                        [csv_file.name]
+                    ).fetchone()[0]
+                    total_listings += listings_count
+                    self.logger.info(f"  Indexed {count:,} instruments, {listings_count:,} listings")
+                except Exception:
+                    self.logger.info(f"  Indexed {count:,} instruments")
+                
+                # Delete CSV file after successful processing if requested
+                if delete_csv:
+                    csv_file.unlink()
+                    self.logger.info(f"  Deleted {csv_file.name}")
+                    
+            except Exception as e:
+                self.logger.error(f"  Failed to index {csv_file.name}: {e}")
+                failed_files.append(csv_file.name)
+        
+        self.logger.info(f"Completed: Indexed {files_processed} files with {total_instruments:,} instruments and {total_listings:,} listings")
+        
+        if failed_files:
+            self.logger.warning(f"Failed to index {len(failed_files)} files: {failed_files}")
+        
+        return {
+            'total_instruments': total_instruments,
+            'total_listings': total_listings,
+            'files_processed': files_processed,
+            'files_skipped': files_skipped,
+            'failed_files': failed_files,
+            'asset_types_processed': sorted(list(asset_types_processed))
+        }
+    
+    def index_unloaded_fulins(self) -> Dict:
+        """
+        Index all FULINS files from cache that haven't been loaded yet.
+        
+        Scans the cache directory for FULINS CSV files, checks which ones
+        have already been indexed in the database, and indexes the remaining files.
+        
+        Returns:
+            Dictionary with indexing statistics including:
+            - files_found: Total FULINS files in cache
+            - files_already_indexed: Files already in database
+            - files_indexed: Newly indexed files
+            - total_instruments: Total instruments indexed
+            - failed_files: List of files that failed to index
+        
+        Example:
+            >>> firds = FIRDSClient()
+            >>> stats = firds.index_unloaded_fulins()
+            >>> print(f"Found {stats['files_found']} FULINS files")
+            >>> print(f"Indexed {stats['files_indexed']} new files")
+            >>> print(f"Added {stats['total_instruments']:,} instruments")
+        """
+        cache_dir = self.config.downloads_path / 'firds'
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.logger.info("Scanning for unloaded FULINS files...")
+        
+        # Find all FULINS CSV files
+        fulins_files = sorted(cache_dir.glob("FULINS_*_data.csv"))
+        self.logger.info(f"Found {len(fulins_files)} FULINS files in cache")
+        
+        if not fulins_files:
+            self.logger.warning("No FULINS files found in cache")
+            return {
+                'files_found': 0,
+                'files_already_indexed': 0,
+                'files_indexed': 0,
+                'total_instruments': 0,
+                'failed_files': []
+            }
+        
+        # Get list of already indexed files
+        indexed_files = set()
+        try:
+            result = self.data_store.con.execute("""
+                SELECT DISTINCT source_file 
+                FROM instruments
+            """).fetchall()
+            indexed_files = {row[0] for row in result}
+            self.logger.info(f"Found {len(indexed_files)} files already indexed")
+        except Exception as e:
+            self.logger.warning(f"Could not query indexed files: {e}")
+        
+        # Filter to unindexed files
+        unindexed_files = [f for f in fulins_files if f.name not in indexed_files]
+        
+        if not unindexed_files:
+            self.logger.info("All FULINS files are already indexed")
+            return {
+                'files_found': len(fulins_files),
+                'files_already_indexed': len(fulins_files),
+                'files_indexed': 0,
+                'total_instruments': 0,
+                'failed_files': []
+            }
+        
+        self.logger.info(f"Indexing {len(unindexed_files)} new FULINS files...")
+        
+        # Index unindexed files
+        total_instruments = 0
+        failed_files = []
+        
+        for i, csv_file in enumerate(unindexed_files, 1):
+            try:
+                self.logger.info(f"[{i}/{len(unindexed_files)}] Indexing {csv_file.name}")
+                count = self.data_store.index_csv_file(csv_file)
+                total_instruments += count
+                self.logger.info(f"  Indexed {count:,} instruments")
+            except Exception as e:
+                self.logger.error(f"  Failed to index {csv_file.name}: {e}")
+                failed_files.append(csv_file.name)
+        
+        self.logger.info(f"Completed: Indexed {len(unindexed_files) - len(failed_files)} files with {total_instruments:,} instruments")
+        
+        if failed_files:
+            self.logger.warning(f"Failed to index {len(failed_files)} files: {failed_files}")
+        
+        return {
+            'files_found': len(fulins_files),
+            'files_already_indexed': len(indexed_files),
+            'files_indexed': len(unindexed_files) - len(failed_files),
+            'total_instruments': total_instruments,
+            'failed_files': failed_files
+        }
     
     def get_store_stats(self) -> Dict:
         """

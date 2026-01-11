@@ -17,6 +17,19 @@ def demonstrate_cfi_classification():
     db_path = str(cache_dir / 'data' / 'firds' / 'firds_complete.db')
     storage = DuckDBStorage(cache_dir, db_path)
     
+    # Check if database has data
+    try:
+        count = storage.con.execute("SELECT COUNT(*) FROM instruments").fetchone()[0]
+        if count == 0:
+            print("\nDatabase is empty. Please run:")
+            print("  1. python examples/00_initialize_database.py")
+            print("  2. Download and index data")
+            return
+    except:
+        print("\nDatabase not initialized. Please run:")
+        print("  python examples/00_initialize_database.py")
+        return
+    
     print("="*80)
     print("CFI CLASSIFICATION DEMONSTRATION")
     print("="*80)

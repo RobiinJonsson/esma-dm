@@ -8,6 +8,18 @@ from .debt import DebtInstrument
 from .equity import EquityInstrument
 from .derivative import DerivativeInstrument, OptionAttributes, FutureAttributes
 from .mapper import InstrumentMapper
+from .subtypes import (
+    EquitySwap,
+    Swaption,
+    EquityOption,
+    MiniFuture,
+    StructuredEquity,
+    StructuredDebt,
+    CommodityFuture,
+    FXForward,
+    get_output_model,
+    parse_instrument,
+)
 
 __all__ = [
     'Instrument',
@@ -20,4 +32,15 @@ __all__ = [
     'OptionAttributes',
     'FutureAttributes',
     'InstrumentMapper',
+    # Subtype output models
+    'EquitySwap',
+    'Swaption',
+    'EquityOption',
+    'MiniFuture',
+    'StructuredEquity',
+    'StructuredDebt',
+    'CommodityFuture',
+    'FXForward',
+    'get_output_model',
+    'parse_instrument',
 ]
