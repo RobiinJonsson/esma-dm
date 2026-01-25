@@ -54,7 +54,7 @@ class QueryBuilder:
     
     # Base instrument query fields by mode
     BASE_FIELDS_CURRENT = """
-        isin, cfi_code, full_name, issuer, source_file, indexed_at, asset_type
+        isin, cfi_code, full_name, short_name, issuer, source_file, indexed_at, instrument_type
     """
     
     BASE_FIELDS_HISTORY = """

@@ -99,6 +99,7 @@ class DuckDBOperations:
         isin_col = self._find_column(df, ['Id', 'Isin', 'ISIN', 'isin'])
         cfi_col = self._find_column(df, ['RefData_FinInstrmGnlAttrbts_ClssfctnTp', 'CfiCd', 'CFI', 'cfi_code', 'CfiCode'])
         name_col = self._find_column(df, ['RefData_FinInstrmGnlAttrbts_FullNm', 'FullNm', 'FullName', 'full_name', 'Name'])
+        short_name_col = self._find_column(df, ['RefData_FinInstrmGnlAttrbts_ShrtNm', 'ShrtNm', 'ShortName', 'short_name'])
         issuer_col = self._find_column(df, ['RefData_Issr', 'Issr', 'Issuer', 'issuer'])
         
         # Asset-specific fields from actual FIRDS data
@@ -126,6 +127,7 @@ class DuckDBOperations:
         master_df['isin'] = df[isin_col]
         master_df['cfi_code'] = df[cfi_col] if cfi_col else None
         master_df['full_name'] = df[name_col] if name_col else None
+        master_df['short_name'] = df[short_name_col] if short_name_col else None
         master_df['issuer'] = df[issuer_col] if issuer_col else None
         master_df['source_file'] = source_file
         master_df['indexed_at'] = pd.Timestamp.now()

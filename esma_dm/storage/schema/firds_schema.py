@@ -14,6 +14,7 @@ def create_master_table(con):
             instrument_type VARCHAR,
             issuer VARCHAR,
             full_name VARCHAR,
+            short_name VARCHAR,
             currency VARCHAR,
             
             -- Historical tracking (ESMA Section 8)

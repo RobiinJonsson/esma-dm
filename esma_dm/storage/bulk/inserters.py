@@ -34,6 +34,7 @@ class BulkInserter:
             'instrument_type': df['asset_type'] if 'asset_type' in df.columns else pd.Series([None] * len(df)),
             'issuer': df['issuer'] if 'issuer' in df.columns else pd.Series([None] * len(df)),
             'full_name': df['full_name'] if 'full_name' in df.columns else pd.Series([None] * len(df)),
+            'short_name': df['short_name'] if 'short_name' in df.columns else pd.Series([None] * len(df)),
             'currency': df['currency'] if 'currency' in df.columns else pd.Series([None] * len(df)),
             'valid_from_date': df['valid_from_date'] if 'valid_from_date' in df.columns else pd.Series([None] * len(df)),
             'valid_to_date': df['valid_to_date'] if 'valid_to_date' in df.columns else pd.Series([None] * len(df)),
@@ -56,7 +57,7 @@ class BulkInserter:
                 # Use INSERT OR IGNORE to handle duplicates
                 insert_query = """
                     INSERT OR IGNORE INTO instruments 
-                    (isin, cfi_code, instrument_type, issuer, full_name, currency,
+                    (isin, cfi_code, instrument_type, issuer, full_name, short_name, currency,
                      valid_from_date, valid_to_date, latest_record_flag, record_type,
                      version_number, source_file, source_file_type, last_update_timestamp,
                      inconsistency_indicator, indexed_at)
