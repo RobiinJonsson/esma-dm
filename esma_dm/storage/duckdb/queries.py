@@ -7,8 +7,8 @@ from typing import Dict, List, Optional, Any
 import pandas as pd
 
 from .connection import DuckDBConnection
-from ...models.utils import CFI
-from ...utils import QueryBuilder
+from esma_dm.models.utils import CFI
+from esma_dm.utils import QueryBuilder
 
 
 class DuckDBQueries:

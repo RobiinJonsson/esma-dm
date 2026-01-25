@@ -89,6 +89,7 @@ class Config:
         (self.downloads_path / "fitrs").mkdir(exist_ok=True)
         (self.downloads_path / "benchmarks").mkdir(exist_ok=True)
         (self.downloads_path / "ssr").mkdir(exist_ok=True)
+        (self.downloads_path / "cache").mkdir(exist_ok=True)
         
         # Ensure database path exists
         if not self.database_path.exists():

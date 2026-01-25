@@ -9,9 +9,9 @@ import requests
 
 from .enums import FileType, AssetType
 from .models import FIRDSFile
-from ...utils import Utils
-from ...utils.validators import validate_isin
-from ...utils.constants import FIRDS_SOLR_URL
+from esma_dm.utils import Utils
+from esma_dm.utils.validators import validate_isin
+from esma_dm.utils.constants import FIRDS_SOLR_URL
 
 
 class FIRDSDownloader:

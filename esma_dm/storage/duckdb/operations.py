@@ -11,7 +11,7 @@ import numpy as np
 
 from .connection import DuckDBConnection
 from ..bulk import BulkInserter
-from ...models.utils import CFI
+from esma_dm.models.utils import CFI
 
 
 class DuckDBOperations:

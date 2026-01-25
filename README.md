@@ -10,6 +10,7 @@ A comprehensive Python package for accessing ESMA (European Securities and Marke
 - **FITRS**: Financial Instruments Transparency System with equity and non-equity data
 - **10 Asset Types**: Full support for C, D, E, F, H, I, J, O, R, S instrument types
 - **CFI Classification**: Complete ISO 10962 decoding with full attribute descriptions
+- **Complete Field Coverage**: Full name, short name, and all ESMA reference data fields
 - **High Performance**: Vectorized bulk loading at 33,000+ instruments/second
 - **DuckDB Storage**: Fast analytical queries on star schema with 12 normalized tables
 - **Cross-Database Queries**: Join FIRDS reference data with FITRS transparency metrics
@@ -447,7 +448,7 @@ info = fitrs.get_methodology_info('YEAR')
 # Cross-database queries (join FIRDS + FITRS)
 edm.transparency.attach_firds()
 sql = """
-SELECT f.isin, f.full_name, t.liquid_market, t.average_daily_turnover
+SELECT f.isin, f.full_name, f.short_name, t.liquid_market, t.average_daily_turnover
 FROM firds.instruments f
 JOIN transparency t ON f.isin = t.isin
 WHERE t.liquid_market = TRUE AND t.methodology = 'YEAR'

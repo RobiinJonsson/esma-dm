@@ -12,8 +12,8 @@ from .models import FIRDSFile
 from .downloader import FIRDSDownloader
 from .parser import FIRDSParser
 from .delta_processor import FIRDSDeltaProcessor
-from ...config import default_config
-from ...storage import StorageBackend, DuckDBStorage
+from esma_dm.config import default_config
+from esma_dm.storage import StorageBackend, DuckDBStorage
 
 
 class FIRDSClient:

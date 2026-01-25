@@ -4,6 +4,34 @@ All notable changes to the esma-dm project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.3.0] - 2026-01-25
+
+### Added
+- **Short name field support** for all instrument types:
+  - Added `short_name` column to instruments database schema
+  - Enhanced field extraction to include `RefData_FinInstrmGnlAttrbts_ShrtNm` (100% populated)
+  - Updated bulk inserters to include short_name in database operations
+  - Extended reference API to return short_name in instrument lookups
+  - Provides concise, readable instrument identifiers (e.g., "NA/Swap OIS EUR 20290806")
+
+### Fixed
+- **FIRDS data model alignment** with actual ESMA structure:
+  - Corrected equity, debt, and swap instrument models to use real FIRDS fields
+  - Fixed database schema column mappings (`asset_type` → `instrument_type`)
+  - Updated bulk inserters to handle processed DataFrame fields correctly
+  - Eliminated fictional/assumed fields in favor of actual ESMA data structure
+  - Resolved foreign key constraint violations through proper insertion order
+- **Database operation improvements**:
+  - Fixed column ordering issues in bulk INSERT operations
+  - Corrected field mapping between CSV extraction and database schema
+  - Enhanced error handling for data type conversions
+  - Improved debug logging for troubleshooting data loading issues
+
+### Changed
+- **Version updated to 0.3.0** reflecting significant data model corrections
+- **Enhanced field extraction logic** to properly map FIRDS column names to model attributes
+- **Improved database schema consistency** across all asset types
+
 ## [Unreleased]
 
 ### Added

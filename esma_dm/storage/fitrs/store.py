@@ -376,7 +376,7 @@ class FITRSStorage:
             firds_db_path: Path to firds.db
             
         Example:
-            >>> fitrs_store.attach_firds_database('downloads/firds.db')
+            >>> fitrs_store.attach_firds_database('storage/duckdb/database/firds_current.duckdb')
             >>> # Now can query both databases
             >>> result = fitrs_store.query(\"\"\"
             ...     SELECT f.isin, f.full_name, t.liquid_market, t.average_daily_turnover

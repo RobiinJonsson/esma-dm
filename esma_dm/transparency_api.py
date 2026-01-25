@@ -14,7 +14,7 @@ class TransparencyAPI:
         Initialize Transparency API.
         
         Args:
-            db_path: Path to FITRS database (defaults to downloads/data/fitrs.db)
+            db_path: Path to FITRS database (defaults to downloads/data/fitrs/fitrs.db)
         """
         self.client = FITRSClient(db_path=db_path)
     
@@ -160,7 +160,7 @@ class TransparencyAPI:
         Attach FIRDS database for cross-database queries.
         
         Args:
-            firds_db_path: Path to FIRDS database (defaults to downloads/data/firds.db)
+            firds_db_path: Path to FIRDS database (defaults to storage/duckdb/database/firds_current.duckdb)
             
         Example:
             >>> edm = ESMADataManager()

@@ -10,7 +10,7 @@ import duckdb
 
 from ..base import StorageBackend
 from ..schema import initialize_schema
-from ... import config as global_config
+from esma_dm import config as global_config
 
 
 class DuckDBConnection:

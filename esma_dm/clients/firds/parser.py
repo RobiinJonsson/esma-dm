@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Any
 import pandas as pd
 
 from .enums import AssetType
-from ...utils.validators import validate_isin, validate_lei, validate_cfi
+from esma_dm.utils.validators import validate_isin, validate_lei, validate_cfi
 
 
 class FIRDSParser:
