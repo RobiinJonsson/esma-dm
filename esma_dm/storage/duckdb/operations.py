@@ -95,11 +95,28 @@ class DuckDBOperations:
     
     def _prepare_master_records(self, df: pd.DataFrame, source_file: str) -> pd.DataFrame:
         """Prepare master instrument records for bulk insert."""
-        # Map various column name patterns
-        isin_col = self._find_column(df, ['Isin', 'ISIN', 'isin'])
-        cfi_col = self._find_column(df, ['CfiCd', 'CFI', 'cfi_code', 'CfiCode'])
-        name_col = self._find_column(df, ['FullNm', 'FullName', 'full_name', 'Name'])
-        issuer_col = self._find_column(df, ['Issr', 'Issuer', 'issuer'])
+        # Map various column name patterns (FIRDS uses 'Id' for ISIN)
+        isin_col = self._find_column(df, ['Id', 'Isin', 'ISIN', 'isin'])
+        cfi_col = self._find_column(df, ['RefData_FinInstrmGnlAttrbts_ClssfctnTp', 'CfiCd', 'CFI', 'cfi_code', 'CfiCode'])
+        name_col = self._find_column(df, ['RefData_FinInstrmGnlAttrbts_FullNm', 'FullNm', 'FullName', 'full_name', 'Name'])
+        issuer_col = self._find_column(df, ['RefData_Issr', 'Issr', 'Issuer', 'issuer'])
+        
+        # Asset-specific fields from actual FIRDS data
+        # Equity fields
+        underlying_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'])
+        commodity_deriv_col = self._find_column(df, ['RefData_FinInstrmGnlAttrbts_CmmdtyDerivInd'])
+        
+        # Debt fields  
+        total_amount_col = self._find_column(df, ['RefData_DebtInstrmAttrbts_TtlIssdNmnlAmt'])
+        maturity_col = self._find_column(df, ['RefData_DebtInstrmAttrbts_MtrtyDt'])
+        nominal_value_col = self._find_column(df, ['RefData_DebtInstrmAttrbts_NmnlValPerUnit'])
+        fixed_rate_col = self._find_column(df, ['RefData_DebtInstrmAttrbts_IntrstRate_Fxd'])
+        debt_seniority_col = self._find_column(df, ['RefData_DebtInstrmAttrbts_DebtSnrty'])
+        
+        # Derivative fields (swaps, options, etc.)
+        price_multiplier_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_PricMltplr'])
+        delivery_type_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_DlvryTp'])
+        expiry_date_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_XpryDt'])
         
         if not isin_col:
             raise ValueError("ISIN column not found")
@@ -113,6 +130,23 @@ class DuckDBOperations:
         master_df['source_file'] = source_file
         master_df['indexed_at'] = pd.Timestamp.now()
         
+        # Add asset-specific fields
+        # Equity fields
+        master_df['underlying_instrument'] = df[underlying_col] if underlying_col else None
+        master_df['commodity_derivative_indicator'] = df[commodity_deriv_col] if commodity_deriv_col else None
+        
+        # Debt fields
+        master_df['total_issued_nominal_amount'] = df[total_amount_col] if total_amount_col else None
+        master_df['maturity_date'] = df[maturity_col] if maturity_col else None
+        master_df['nominal_value_per_unit'] = df[nominal_value_col] if nominal_value_col else None
+        master_df['fixed_interest_rate'] = df[fixed_rate_col] if fixed_rate_col else None
+        master_df['debt_seniority'] = df[debt_seniority_col] if debt_seniority_col else None
+        
+        # Derivative fields
+        master_df['price_multiplier'] = df[price_multiplier_col] if price_multiplier_col else None
+        master_df['delivery_type'] = df[delivery_type_col] if delivery_type_col else None
+        master_df['expiry_date'] = df[expiry_date_col] if expiry_date_col else None
+        
         # Add asset type based on CFI
         if cfi_col:
             master_df['asset_type'] = df[cfi_col].str[0] if cfi_col else None
@@ -121,41 +155,75 @@ class DuckDBOperations:
     
     def _insert_listings(self, df: pd.DataFrame, source_file: str):
         """Insert market listings if trading venue columns are present."""
-        # Map listing columns
-        isin_col = self._find_column(df, ['Isin', 'ISIN', 'isin'])
-        venue_col = self._find_column(df, ['TradgVnIssr', 'TradingVenue', 'trading_venue'])
-        segment_col = self._find_column(df, ['Sgmt', 'Segment', 'segment'])
+        print(f"[DEBUG] _insert_listings called with {len(df)} rows")
+        print(f"[DEBUG] Available columns: {list(df.columns)[:10]}...")  # Show first 10 columns
+        
+        # Map listing columns using actual FIRDS CSV column names
+        isin_col = self._find_column(df, ['Id', 'ISIN', 'isin'])
+        venue_col = self._find_column(df, [
+            'RefData_TradgVnRltdAttrbts_Id',
+            'TradgVnIssr', 
+            'TradingVenue', 
+            'trading_venue'
+        ])
+        
+        print(f"[DEBUG] Found columns - ISIN: {isin_col}, Venue: {venue_col}")
         
         if not all([isin_col, venue_col]):
-            self.logger.debug("Missing required columns for listings")
+            self.logger.debug(f"Missing required columns for listings - ISIN: {isin_col}, Venue: {venue_col}")
             return
+        
+        # Map additional listing columns
+        first_trade_col = self._find_column(df, ['RefData_TradgVnRltdAttrbts_FrstTradDt'])
+        termination_col = self._find_column(df, ['RefData_TradgVnRltdAttrbts_TermntnDt'])
+        admission_approval_col = self._find_column(df, ['RefData_TradgVnRltdAttrbts_AdmssnApprvlDtByIssr'])
+        admission_request_col = self._find_column(df, ['RefData_TradgVnRltdAttrbts_ReqForAdmssnDt'])
+        issuer_request_col = self._find_column(df, ['RefData_TradgVnRltdAttrbts_IssrReq'])
         
         # Prepare listings data
         listings_df = pd.DataFrame()
         listings_df['isin'] = df[isin_col]
-        listings_df['trading_venue'] = df[venue_col]
-        listings_df['segment'] = df[segment_col] if segment_col else None
+        listings_df['trading_venue_id'] = df[venue_col]
+        listings_df['first_trade_date'] = df[first_trade_col] if first_trade_col else None
+        listings_df['termination_date'] = df[termination_col] if termination_col else None  
+        listings_df['admission_approval_date'] = df[admission_approval_col] if admission_approval_col else None
+        listings_df['request_for_admission_date'] = df[admission_request_col] if admission_request_col else None
+        listings_df['issuer_request'] = df[issuer_request_col] if issuer_request_col else None
         listings_df['source_file'] = source_file
         listings_df['indexed_at'] = pd.Timestamp.now()
         
         # Remove rows with null required values
-        listings_df = listings_df.dropna(subset=['isin', 'trading_venue'])
+        listings_df = listings_df.dropna(subset=['isin', 'trading_venue_id'])
+        
+        print(f"[DEBUG] Prepared {len(listings_df)} listings records")
+        print(f"[DEBUG] Sample listings data: {listings_df.head(2).to_dict('records') if len(listings_df) > 0 else 'No data'}")
         
         if len(listings_df) == 0:
+            self.logger.debug("No valid listings data to insert")
             return
         
         # Insert into listings table
         try:
-            self.con.execute("BEGIN TRANSACTION")
+            print(f"[DEBUG] Attempting to insert {len(listings_df)} listings")
             
-            # Use pandas to_sql for efficient bulk insert
-            listings_df.to_sql('listings', self.con, if_exists='append', index=False, method='multi')
+            # Use DuckDB's native bulk insert instead of pandas to_sql
+            insert_query = """
+                INSERT INTO listings 
+                (isin, trading_venue_id, first_trade_date, termination_date, 
+                 admission_approval_date, request_for_admission_date, issuer_request,
+                 source_file, indexed_at)
+                SELECT * FROM listings_temp
+            """
             
-            self.con.execute("COMMIT")
-            self.logger.debug(f"Inserted {len(listings_df)} market listings")
+            # Create temporary view and insert
+            self.con.execute("CREATE OR REPLACE VIEW listings_temp AS SELECT * FROM listings_df")
+            result = self.con.execute(insert_query)
+            
+            print(f"[DEBUG] Successfully inserted listings")
+            self.logger.info(f"Inserted {len(listings_df)} market listings")
             
         except Exception as e:
-            self.con.execute("ROLLBACK")
+            print(f"[DEBUG] Listings INSERT failed with error: {e}")
             self.logger.error(f"Failed to insert listings: {e}")
             raise
     
@@ -209,24 +277,46 @@ class DuckDBOperations:
             total_inserted = 0
             
             try:
-                # Process each asset type separately for optimal performance
+                # Use BulkInserter for efficient batch processing
+                inserter = BulkInserter(self.con, self._find_column)
+                
+                # FIRST: Insert into main instruments table
+                self.logger.debug(f"Inserting {len(master_df)} instruments into main table")
+                inserter.insert_instruments(master_df)
+                
+                # THEN: Process each asset type separately for asset-specific tables
                 for asset_type, asset_df in instruments_by_type:
                     if pd.isna(asset_type):
                         asset_type = 'unknown'
                     
-                    self.logger.debug(f"Processing {len(asset_df)} {asset_type} instruments")
+                    self.logger.debug(f"Processing {len(asset_df)} {asset_type} instruments for asset-specific table")
                     
-                    # Use BulkInserter for efficient batch processing
-                    inserter = BulkInserter(self.con, mode=self.connection.mode)
+                    # Use appropriate insert method based on asset type
+                    if asset_type == 'E':
+                        inserter.insert_equities(asset_df)
+                    elif asset_type == 'D':
+                        inserter.insert_debt(asset_df)
+                    elif asset_type == 'S':
+                        inserter.insert_swaps(asset_df)
+                    elif asset_type == 'F':
+                        inserter.insert_futures(asset_df)
+                    elif asset_type == 'I':
+                        inserter.insert_options(asset_df)
+                    elif asset_type == 'J':
+                        inserter.insert_forwards(asset_df)
+                    elif asset_type == 'H':
+                        inserter.insert_rights(asset_df)
+                    elif asset_type == 'C':
+                        inserter.insert_civs(asset_df)
+                    elif asset_type == 'R':
+                        inserter.insert_spots(asset_df)
+                    else:
+                        self.logger.warning(f"Unknown asset type: {asset_type}, skipping")
+                        continue
                     
-                    # Prepare vectors for bulk insert
-                    vectors = inserter.prepare_vectors(asset_df, asset_type)
-                    
-                    # Bulk insert
-                    inserted_count = inserter.insert_batch(vectors, asset_type)
+                    inserted_count = len(asset_df)  # Assume all rows were processed
                     total_inserted += inserted_count
-                    
-                    self.logger.debug(f"Inserted {inserted_count} {asset_type} instruments")
+                    self.logger.debug(f"Processed {inserted_count} {asset_type} instruments")
                 
                 # Insert market listings if data is available
                 self._insert_listings(df, source_file)

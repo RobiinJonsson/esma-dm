@@ -10,23 +10,26 @@ from .base import Instrument
 @dataclass
 class DebtInstrument(Instrument):
     """
-    Debt instrument (bonds, notes, etc.) with debt-specific attributes.
+    Debt instrument (bonds, notes, etc.) based on actual FIRDS data structure.
     
     Covers CFI codes starting with 'D' (Debt instruments).
     """
     
-    # Debt-specific attributes
+    # Actual debt-specific attributes from FIRDS
     total_issued_nominal_amount: Optional[float] = None
-    """Total issued nominal amount"""
+    """Total issued nominal amount (RefData_DebtInstrmAttrbts_TtlIssdNmnlAmt)"""
     
     maturity_date: Optional[date] = None
-    """Maturity date of the debt instrument"""
+    """Maturity date (RefData_DebtInstrmAttrbts_MtrtyDt)"""
     
     nominal_value_per_unit: Optional[float] = None
-    """Nominal value per unit"""
+    """Nominal value per unit (RefData_DebtInstrmAttrbts_NmnlValPerUnit)"""
+    
+    fixed_interest_rate: Optional[float] = None
+    """Fixed interest rate (RefData_DebtInstrmAttrbts_IntrstRate_Fxd)"""
     
     debt_seniority: Optional[str] = None
-    """Debt seniority level (SNDB=Senior, SBOD=Subordinated, etc.)"""
+    """Debt seniority level (RefData_DebtInstrmAttrbts_DebtSnrty)"""
     
     # Interest rate information
     interest_rate_type: Optional[str] = None

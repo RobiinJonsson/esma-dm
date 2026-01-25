@@ -6,12 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+#### Package Infrastructure (2026-01-11)
+- **Enhanced setup.py** with proper dependencies and metadata:
+  - Added DuckDB and NumPy as required dependencies
+  - Updated version to 0.2.0 reflecting architectural improvements
+  - Added Python 3.13 support and enhanced dev dependencies
+  - Enhanced keywords and project classifiers
+- **Virtual environment testing**:
+  - Created `scripts/test_virtual_env.py` for clean environment validation
+  - Comprehensive integration testing ensuring all components work together
+  - Backwards compatibility verification for existing user code
+- **Documentation updates**:
+  - Updated README.md with new modular architecture overview
+  - Enhanced Copilot instructions with utility module patterns
+  - Comprehensive CHANGELOG documentation of all changes
+
 ### Changed
 
 #### Architectural Refactoring (2026-01-11)
 - **Created centralized utility modules** for code reusability:
   - `esma_dm/utils/validators.py`: ISO standard validators (ISIN/ISO 6166, LEI/ISO 17442, CFI/ISO 10962, MIC/ISO 10383)
   - `esma_dm/utils/constants.py`: ESMA URL constants, file patterns, default settings
+  - `esma_dm/utils/query_builder.py`: Reusable SQL query patterns for database operations
+  - `esma_dm/utils/shared_utils.py`: Common utilities for file operations and XML parsing
   - `esma_dm/utils/__init__.py`: Unified export interface for all utilities
 - **Enhanced configuration system**:
   - Added URL constants to Config class (FIRDS_BASE_URL, FITRS_BASE_URL, SSR_BASE_URL, BENCHMARKS_BASE_URL)
@@ -27,10 +46,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - `esma_dm/storage/duckdb_store.py`: Compatibility import layer (9 lines)
   - **Benefits**: Better separation of concerns, easier testing, reduced file complexity
   - **Backward compatibility**: All existing imports continue to work unchanged
+- **Modularized FIRDS client** (1116→6 focused modules):
+  - `esma_dm/clients/firds/enums.py`: File types, asset types, record types (45 lines)
+  - `esma_dm/clients/firds/models.py`: Data models and validation (120 lines)
+  - `esma_dm/clients/firds/downloader.py`: File download and caching logic (280 lines)
+  - `esma_dm/clients/firds/parser.py`: CSV parsing and instrument mapping (200 lines)
+  - `esma_dm/clients/firds/delta_processor.py`: Delta file processing (150 lines)
+  - `esma_dm/clients/firds/client.py`: Main client orchestrator (265 lines)
+  - **Benefits**: Independent testing, better maintainability, clear separation of concerns
+- **Organized storage directory structure**:
+  - `esma_dm/storage/schema/`: Table definitions and database schemas
+  - `esma_dm/storage/bulk/`: Bulk insert operations and vectorization
+  - `esma_dm/storage/fitrs/`: FITRS-specific storage components
+  - **Benefits**: Logical grouping, easier navigation, cleaner imports
 - **Eliminated code duplication**:
+  - Created QueryBuilder utility to extract recurring SQL patterns from storage classes
   - Removed duplicate validator methods from clients/firds.py and firds.py (now delegate to utils.validators)
   - Removed hardcoded URLs from all clients (FIRDS, FITRS, SSR) - now use constants module
-  - Removed hardcoded DVCAP URL from fitrs.py
+  - Removed hardcoded SQL queries - now use QueryBuilder for consistency
+  - Centralized CFI asset type mappings in QueryBuilder.ASSET_TYPE_TABLES
 - **Updated imports across codebase**:
   - All clients now import from esma_dm.utils.constants for URLs
   - All validators now import from esma_dm.utils.validators

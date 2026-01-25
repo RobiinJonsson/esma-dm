@@ -17,8 +17,42 @@ A comprehensive Python package for accessing ESMA (European Securities and Marke
 - **RTS 23 Compliance**: Full support for regulatory technical standards
 - **SQL Interface**: Run complex queries on 2.3M+ instruments
 - **Database Management**: Initialize, drop, and update methods for lifecycle control
-- **Modular Architecture**: Separated schema, bulk inserters, and storage orchestration
+- **Modular Architecture**: Clean separation of concerns with utility modules and focused components
+- **ISO Standard Validation**: Built-in validators for ISIN, LEI, CFI, and MIC codes
 - **Transparency API**: Query liquidity and turnover metrics via edm.transparency()
+
+## Architecture
+
+### Modular Design
+
+The package follows a clean, modular architecture with clear separation of concerns:
+
+```
+esma_dm/
+├── clients/          # Data source clients
+│   ├── firds/        # Modular FIRDS client
+│   ├── fitrs/        # FITRS transparency data
+│   └── ssr/          # Short selling regulation
+├── storage/          # Database backends
+│   ├── duckdb/       # DuckDB implementation
+│   ├── schema/       # Table definitions
+│   └── bulk/         # Bulk loading operations
+├── models/           # Data models and mappers
+├── utils/            # Shared utilities
+│   ├── validators.py # ISO standard validators
+│   ├── constants.py  # URLs and configuration
+│   ├── query_builder.py # SQL query patterns
+│   └── shared_utils.py # Common utilities
+└── reference_api.py  # High-level query interface
+```
+
+### Benefits
+
+- **Maintainability**: Each module has a single responsibility
+- **Testability**: Components can be tested independently
+- **Extensibility**: Easy to add new data sources or storage backends
+- **Reusability**: Shared utilities eliminate code duplication
+- **Type Safety**: Full type hints and validation
 
 ## Installation
 

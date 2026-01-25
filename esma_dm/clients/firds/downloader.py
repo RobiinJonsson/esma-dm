@@ -118,6 +118,7 @@ class FIRDSDownloader:
     ) -> pd.DataFrame:
         """
         Retrieve the latest full FIRDS files for a specific asset type.
+        Intelligently chooses between API results and cached files.
         
         Args:
             asset_type: CFI first character (C, D, E, F, H, I, J, O, R, S)
@@ -140,6 +141,15 @@ class FIRDSDownloader:
         except ValueError:
             valid_types = [t.value for t in AssetType]
             raise ValueError(f"Invalid asset_type '{asset_type}'. Must be one of: {valid_types}")
+        
+        # Check for newer cached files first (unless update=True)
+        if not update:
+            cached_data = self._check_cached_files(asset_type)
+            if cached_data is not None:
+                # Apply ISIN filter if provided
+                if isin_filter and 'Id' in cached_data.columns:
+                    cached_data = cached_data[cached_data['Id'].isin(isin_filter)]
+                return cached_data
         
         # Get file list with filters
         files = self.get_file_list(file_type='FULINS', asset_type=asset_type)
@@ -181,6 +191,107 @@ class FIRDSDownloader:
         result = pd.concat(dfs, ignore_index=True)
         self.logger.info(f"Retrieved {len(result)} instruments")
         return result
+    
+    def _check_cached_files(self, asset_type: str) -> Optional[pd.DataFrame]:
+        """
+        Check for cached files that are newer than API results.
+        
+        Args:
+            asset_type: Asset type to check
+            
+        Returns:
+            Combined DataFrame from cached files if newer than API, else None
+        """
+        import os
+        import pandas as pd
+        from datetime import datetime
+        
+        cache_dir = self.config.downloads_path / 'firds'
+        if not cache_dir.exists():
+            return None
+        
+        # Find cached FULINS files for this asset type
+        pattern = f"FULINS_{asset_type}_"
+        cached_files = [
+            f for f in os.listdir(cache_dir)
+            if f.startswith(pattern) and f.endswith('_data.csv')
+        ]
+        
+        if not cached_files:
+            return None
+        
+        # Extract dates from cached files
+        cached_dates = []
+        for filename in cached_files:
+            try:
+                # Extract date: FULINS_S_20260103_01of05_data.csv -> 20260103
+                date_str = filename.split('_')[2]
+                cached_dates.append(date_str)
+            except (IndexError, ValueError):
+                continue
+        
+        if not cached_dates:
+            return None
+        
+        # Get the newest cached date
+        max_cached_date = max(cached_dates)
+        
+        # Compare with API latest (if available)
+        try:
+            files = self.get_file_list(file_type='FULINS', asset_type=asset_type)
+            if not files.empty:
+                files['date'] = files['file_name'].str.extract(r'_(\d{8})_')[0]
+                api_max_date = files['date'].max()
+                
+                # Use cached if newer or equal to API
+                if max_cached_date >= api_max_date:
+                    self.logger.info(f"Using cached files from {max_cached_date} (API has {api_max_date})")
+                    return self._load_cached_files(asset_type, max_cached_date)
+                else:
+                    self.logger.info(f"API has newer files ({api_max_date}) than cache ({max_cached_date})")
+                    return None
+            else:
+                # No API results, use cached
+                self.logger.info(f"API returned no results, using cached files from {max_cached_date}")
+                return self._load_cached_files(asset_type, max_cached_date)
+                
+        except Exception as e:
+            self.logger.warning(f"Error checking API: {e}, using cached files")
+            return self._load_cached_files(asset_type, max_cached_date)
+    
+    def _load_cached_files(self, asset_type: str, date: str) -> pd.DataFrame:
+        """Load and combine all cached files for a specific asset type and date."""
+        import os
+        import pandas as pd
+        
+        cache_dir = self.config.downloads_path / 'firds'
+        pattern = f"FULINS_{asset_type}_{date}_"
+        
+        cached_files = [
+            os.path.join(cache_dir, f)
+            for f in os.listdir(cache_dir)
+            if f.startswith(pattern) and f.endswith('_data.csv')
+        ]
+        
+        if not cached_files:
+            return pd.DataFrame()
+        
+        dfs = []
+        for file_path in cached_files:
+            try:
+                df = pd.read_csv(file_path)
+                if not df.empty:
+                    dfs.append(df)
+                    self.logger.info(f"Loaded {len(df)} records from {os.path.basename(file_path)}")
+            except Exception as e:
+                self.logger.warning(f"Failed to load {file_path}: {e}")
+        
+        if dfs:
+            result = pd.concat(dfs, ignore_index=True)
+            self.logger.info(f"Combined {len(result)} total records from cached files")
+            return result
+        
+        return pd.DataFrame()
     
     def get_instruments(
         self,

@@ -69,18 +69,12 @@ def create_listings_table(con):
 
 
 def create_equity_table(con):
-    """Create equity instruments table (E)."""
+    """Create equity instruments table (E) based on actual FIRDS data structure."""
     con.execute("""
         CREATE TABLE IF NOT EXISTS equity_instruments (
             isin VARCHAR PRIMARY KEY,
-            short_name VARCHAR,
-            dividend_payment_frequency VARCHAR,
-            voting_rights_per_share VARCHAR,
-            ownership_restriction VARCHAR,
-            redemption_type VARCHAR,
-            capital_investment_restriction VARCHAR,
-            competent_authority VARCHAR,
-            publication_date DATE,
+            underlying_instrument VARCHAR,  -- RefData_DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN
+            commodity_derivative_indicator BOOLEAN,  -- RefData_FinInstrmGnlAttrbts_CmmdtyDerivInd
             version_number INTEGER DEFAULT 1,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
@@ -88,25 +82,15 @@ def create_equity_table(con):
 
 
 def create_debt_table(con):
-    """Create debt instruments table (D)."""
+    """Create debt instruments table (D) based on actual FIRDS data structure."""
     con.execute("""
         CREATE TABLE IF NOT EXISTS debt_instruments (
             isin VARCHAR PRIMARY KEY,
-            short_name VARCHAR,
-            maturity_date DATE,
-            total_issued_nominal_amount DOUBLE,
-            nominal_value_per_unit DOUBLE,
-            interest_rate_type VARCHAR,
-            fixed_rate DOUBLE,
-            floating_rate_reference VARCHAR,
-            floating_rate_index VARCHAR,
-            floating_rate_term_unit VARCHAR,
-            floating_rate_term_value VARCHAR,
-            floating_rate_basis_spread DOUBLE,
-            debt_seniority VARCHAR,
-            delivery_type VARCHAR,
-            competent_authority VARCHAR,
-            publication_date DATE,
+            total_issued_nominal_amount DOUBLE,  -- RefData_DebtInstrmAttrbts_TtlIssdNmnlAmt
+            maturity_date DATE,                  -- RefData_DebtInstrmAttrbts_MtrtyDt
+            nominal_value_per_unit DOUBLE,       -- RefData_DebtInstrmAttrbts_NmnlValPerUnit
+            fixed_interest_rate DOUBLE,          -- RefData_DebtInstrmAttrbts_IntrstRate_Fxd
+            debt_seniority VARCHAR,              -- RefData_DebtInstrmAttrbts_DebtSnrty
             version_number INTEGER DEFAULT 1,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
@@ -135,27 +119,17 @@ def create_futures_table(con):
 
 
 def create_option_table(con):
-    """Create option instruments table (O, H)."""
+    """Create option instruments table (I) based on actual FIRDS data structure.
+    
+    Note: FIRDS asset type I contains environmental derivatives, not traditional options.
+    """
     con.execute("""
         CREATE TABLE IF NOT EXISTS option_instruments (
             isin VARCHAR PRIMARY KEY,
-            short_name VARCHAR,
-            expiry_date DATE,
-            price_multiplier DOUBLE,
-            underlying_isin VARCHAR,
-            underlying_index_isin VARCHAR,
-            underlying_index_name VARCHAR,
-            option_type VARCHAR,
-            option_exercise_style VARCHAR,
-            strike_price DOUBLE,
-            strike_price_percentage DOUBLE,
-            strike_price_basis_points DOUBLE,
-            strike_price_currency VARCHAR,
-            delivery_type VARCHAR,
-            fx_type VARCHAR,
-            other_notional_currency VARCHAR,
-            competent_authority VARCHAR,
-            publication_date DATE,
+            asset_class_base_product VARCHAR,    -- RefData_DerivInstrmAttrbts_AsstClssSpcfc (base)
+            asset_class_sub_product VARCHAR,     -- RefData_DerivInstrmAttrbts_AsstClssSpcfc (sub)
+            asset_class_further_sub VARCHAR,     -- RefData_DerivInstrmAttrbts_AsstClssSpcfc (further)
+            asset_class_transaction_type VARCHAR, -- RefData_DerivInstrmAttrbts_AsstClssSpcfc (transaction)
             version_number INTEGER DEFAULT 1,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )
@@ -163,27 +137,15 @@ def create_option_table(con):
 
 
 def create_swap_table(con):
-    """Create swap instruments table (S)."""
+    """Create swap instruments table (S) based on actual FIRDS data structure."""
     con.execute("""
         CREATE TABLE IF NOT EXISTS swap_instruments (
             isin VARCHAR PRIMARY KEY,
-            short_name VARCHAR,
-            expiry_date DATE,
-            price_multiplier DOUBLE,
-            underlying_isin VARCHAR,
-            underlying_lei VARCHAR,
-            underlying_index_isin VARCHAR,
-            underlying_index_name VARCHAR,
-            underlying_index_term_unit VARCHAR,
-            underlying_index_term_value VARCHAR,
-            underlying_basket_isin VARCHAR,
-            delivery_type VARCHAR,
-            interest_rate_reference_name VARCHAR,
-            interest_rate_term_unit VARCHAR,
-            interest_rate_term_value VARCHAR,
-            fx_other_notional_currency VARCHAR,
-            competent_authority VARCHAR,
-            publication_date DATE,
+            price_multiplier DOUBLE,             -- RefData_DerivInstrmAttrbts_PricMltplr
+            delivery_type VARCHAR,               -- RefData_DerivInstrmAttrbts_DlvryTp  
+            expiry_date DATE,                    -- RefData_DerivInstrmAttrbts_XpryDt
+            asset_class_specific VARCHAR,        -- RefData_DerivInstrmAttrbts_AsstClssSpcfc*
+            underlying_instrument VARCHAR,       -- RefData_DerivInstrmAttrbts_UndrlygInstrm*
             version_number INTEGER DEFAULT 1,
             FOREIGN KEY (isin) REFERENCES instruments(isin)
         )

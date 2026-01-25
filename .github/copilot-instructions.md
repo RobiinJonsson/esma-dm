@@ -5,22 +5,54 @@ Python package for accessing ESMA (European Securities and Markets Authority) pu
 
 ## Architecture Overview
 
-### Three-Layer Design
+## Architecture Overview
+
+### Modular Design (2026-01-11 Refactoring)
+
+The package follows a clean, modular architecture with four main layers:
+
 1. **Client Layer** (`esma_dm/clients/`): Download and parse ESMA XML/CSV files
-   - `FIRDSClient`: Reference data (2.3M+ instruments, 10 asset types C,D,E,F,H,I,J,O,R,S)
+   - `firds/`: Modular FIRDS client (6 focused modules)
+     - `client.py`: Main orchestrator (265 lines)
+     - `downloader.py`: File download and caching (280 lines) 
+     - `parser.py`: CSV parsing and mapping (200 lines)
+     - `delta_processor.py`: Delta file processing (150 lines)
+     - `enums.py`: Type definitions (45 lines)
+     - `models.py`: Data models (120 lines)
    - `FITRSClient`: Transparency/liquidity metrics
    - `BenchmarksClient`, `SSRClient`: Other ESMA datasets
 
-2. **Storage Layer** (`esma_dm/storage/`): DuckDB star schema with vectorized bulk loading
-   - `DuckDBStorage`: Master orchestrator, mode-based database selection
-   - `schema.py`: 13 tables (1 master instruments, 10 asset-specific, 1 listings, 1 cancellations)
-   - `bulk_inserters.py`: Asset-type-grouped batch inserts (33,000+ instruments/second)
-   - Separate databases: `firds_current.duckdb` (9 columns, latest only) vs `firds_history.duckdb` (17 columns, full versioning)
+2. **Storage Layer** (`esma_dm/storage/`): DuckDB implementation with organized structure
+   - `duckdb/`: Modular DuckDB backend (5 focused modules)
+     - `__init__.py`: DuckDBStorage orchestrator (130 lines)
+     - `connection.py`: Database connection management (140 lines)
+     - `operations.py`: Bulk insert/update operations (285 lines)
+     - `queries.py`: Retrieval and search queries (350 lines)
+     - `versioning.py`: Delta processing and version management (250 lines)
+   - `schema/`: Table definitions organized by purpose
+   - `bulk/`: Vectorized bulk loading operations
+   - `fitrs/`: FITRS-specific storage components
 
-3. **API Layer** (`esma_dm/`): Pythonic access patterns
+3. **Utilities Layer** (`esma_dm/utils/`): Shared components eliminating duplication
+   - `validators.py`: ISO standard validators (ISIN/ISO 6166, LEI/ISO 17442, CFI/ISO 10962, MIC/ISO 10383)
+   - `constants.py`: ESMA URL constants, file patterns, default settings
+   - `query_builder.py`: Reusable SQL query patterns for database operations
+   - `shared_utils.py`: Common utilities for file operations and XML parsing
+   - `__init__.py`: Unified export interface for all utilities
+
+4. **API Layer** (`esma_dm/`): High-level Pythonic access patterns
    - `reference_api.py`: `edm.reference('ISIN')` and `edm.reference.swap.types()`
    - `transparency_api.py`: `edm.transparency('ISIN')` for FITRS data
    - Cross-database joins via DuckDB ATTACH
+
+### Benefits of Modular Architecture
+
+- **Maintainability**: Each module has a single, clear responsibility
+- **Testability**: Components can be tested independently with focused test suites
+- **Reusability**: Utilities eliminate code duplication across the entire codebase
+- **Extensibility**: Easy to add new data sources, storage backends, or query patterns
+- **Type Safety**: Full type hints and validation throughout
+- **Performance**: QueryBuilder centralizes SQL optimization patterns
 
 ### Mode-Based Operation
 Critical design decision (see CHANGELOG 2026-01-11): FIRDSClient has two operational modes that use different databases and schemas:
@@ -105,6 +137,93 @@ See `esma_dm/models/utils/cfi.py` for full ISO 10962 decoding (6-char CFI → hu
 - Log errors with appropriate level (use logging module)
 - Provide helpful error messages
 - Clean up resources in finally blocks
+
+## Utility Modules
+
+### Validators (`esma_dm/utils/validators.py`)
+ISO standard validation for financial identifiers:
+```python
+from esma_dm.utils import validate_isin, validate_lei, validate_cfi, validate_mic
+
+# Validate ISIN (ISO 6166)
+if validate_isin('US0378331005'):
+    print("Valid ISIN")
+
+# Validate LEI (ISO 17442)
+if validate_lei('549300VALTPVHYSYMH70'):
+    print("Valid LEI")
+
+# Validate CFI (ISO 10962)
+if validate_cfi('ESVUFR'):
+    print("Valid CFI")
+
+# Validate MIC (ISO 10383) - supports both X-prefixed and other formats
+if validate_mic('XNYS'):  # NYSE
+    print("Valid MIC")
+if validate_mic('FRAB'):  # Brussels (doesn't start with X)
+    print("Valid MIC")
+
+# Multi-type validation
+is_valid, error = validate_instrument_identifier('US0378331005', 'ISIN')
+```
+
+### Constants (`esma_dm/utils/constants.py`)
+Centralized ESMA register URLs and configuration values:
+```python
+from esma_dm.utils.constants import (
+    FIRDS_SOLR_URL,        # FIRDS endpoint
+    FITRS_SOLR_URL,        # FITRS endpoint
+    DVCAP_SOLR_URL,        # DVCAP endpoint
+    SSR_SOLR_URL,          # SSR endpoint
+    ASSET_TYPE_CODES,      # CFI asset type mapping
+    DATABASE_MODES,        # Valid mode values
+    FILE_TYPE_PATTERNS     # Filename patterns
+)
+
+# Use in clients
+class MyClient:
+    BASE_URL = FIRDS_SOLR_URL  # Instead of hardcoded URL
+```
+
+### QueryBuilder (`esma_dm/utils/query_builder.py`)
+Reusable SQL query patterns eliminating code duplication:
+```python
+from esma_dm.utils import QueryBuilder
+
+# Create mode-aware query builder
+qb = QueryBuilder('current')  # or 'history'
+
+# Generate consistent SQL patterns
+isin_query = qb.get_instrument_by_isin('US0378331005')
+search_query = qb.search_instruments(limit=10)
+stats_query = qb.get_stats_by_asset_type()
+
+# Bulk insert patterns
+insert_query = qb.bulk_insert_instruments(['isin', 'cfi_code', 'full_name'])
+
+# Asset type validation
+if qb.validate_asset_type('E'):
+    asset_query = qb.get_asset_specific_details('E', 'US0378331005')
+```
+
+### Configuration (`esma_dm/config.py`)
+Enhanced with utility integration:
+```python
+from esma_dm.config import Config
+
+config = Config(mode='current')
+
+# Mode validation (raises ValueError if invalid)
+config.mode  # Must be 'current' or 'history'
+
+# Database path helper
+db_path = config.get_database_path('firds', 'current')
+# Returns: downloads/data/firds/firds_current.duckdb
+
+# ESMA URL access
+config.FIRDS_BASE_URL  # From constants module
+config.FITRS_BASE_URL
+```
 
 ## Critical Development Workflows
 

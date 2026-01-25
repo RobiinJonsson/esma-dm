@@ -27,13 +27,13 @@ class DuckDBStorage(StorageBackend):
     - Versioning: Delta processing (history mode only)
     """
     
-    def __init__(self, cache_dir: Path, db_path: Optional[str] = None, mode: str = 'current'):
+    def __init__(self, cache_dir: Path, db_path: str, mode: str = 'current'):
         """Initialize DuckDB storage with modular components."""
         super().__init__(cache_dir)
         self.logger = logging.getLogger(__name__)
         
-        # Initialize connection manager
-        self.connection = DuckDBConnection(cache_dir, db_path, mode)
+        # Initialize connection manager with database path
+        self.connection = DuckDBConnection(db_path, mode)
         
         # Initialize modular components
         self.operations = DuckDBOperations(self.connection)

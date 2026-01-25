@@ -48,6 +48,15 @@ class InstrumentMapper:
         'TradgVnRltdAttrbts_AdmssnApprvlDtByIssr': 'trading_venue.admission_approval_date',
         'TradgVnRltdAttrbts_ReqForAdmssnDt': 'trading_venue.request_for_admission_date',
         'TradgVnRltdAttrbts_FrstTradDt': 'trading_venue.first_trade_date',
+    }
+    
+    DEBT_FIELD_MAP = {
+        # Actual debt fields from FIRDS
+        'DebtInstrmAttrbts_TtlIssdNmnlAmt': 'total_issued_nominal_amount',
+        'DebtInstrmAttrbts_MtrtyDt': 'maturity_date', 
+        'DebtInstrmAttrbts_NmnlValPerUnit': 'nominal_value_per_unit',
+        'DebtInstrmAttrbts_IntrstRate_Fxd': 'fixed_interest_rate',
+        'DebtInstrmAttrbts_DebtSnrty': 'debt_seniority',
         'TradgVnRltdAttrbts_TermntnDt': 'trading_venue.termination_date',
         
         # Technical attributes (both spellings)
@@ -97,10 +106,13 @@ class InstrumentMapper:
     DERIVATIVE_FIELD_MAP = {
         'DerivInstrmAttrbts_XpryDt': 'expiry_date',
         'DerivInstrmAttrbts_PricMltplr': 'price_multiplier',
+        'DerivInstrmAttrbts_DlvryTp': 'delivery_type',
         'DerivInstrmAttrbts_UndrlygInstrm_ISIN': 'underlying_isin',
-        'DerivInstrmAttrbts_UndrlygInstrm_Indx_Nm': 'underlying_index_name',
-        'DerivInstrmAttrbts_UndrlygInstrm_Indx_Term_Val': 'underlying_index_term_value',
-        'DerivInstrmAttrbts_UndrlygInstrm_Indx_Term_Unit': 'underlying_index_term_unit',
+        'DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN': 'underlying_instrument',  # Actual FIRDS field
+        'DerivInstrmAttrbts_AsstClssSpcfc_Cmmdty_Pdct_Nrgy_Oil_BasePdct': 'asset_class_base_product',
+        'DerivInstrmAttrbts_AsstClssSpcfc_Cmmdty_Pdct_Nrgy_Oil_SubPdct': 'asset_class_sub_product',
+        'DerivInstrmAttrbts_AsstClssSpcfc_Cmmdty_Pdct_Nrgy_Oil_AddtlSubPdct': 'asset_class_further_sub',
+        'DerivInstrmAttrbts_AsstClssSpcfc_Envtl_Pdct_Emis_EmisAllctn_Unit': 'asset_class_transaction_type',
         'DerivInstrmAttrbts_NtnlCcy_1': 'notional_currency_1',
         'DerivInstrmAttrbts_NtnlCcy_2': 'notional_currency_2',
         

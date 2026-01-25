@@ -214,6 +214,13 @@ class DuckDBQueries:
         total_result = self.con.execute(total_query).fetchone()
         stats["total_instruments"] = total_result[0] if total_result else 0
         
+        # Total listings
+        try:
+            listings_result = self.con.execute("SELECT COUNT(*) FROM listings").fetchone()
+            stats["total_listings"] = listings_result[0] if listings_result else 0
+        except:
+            stats["total_listings"] = 0
+        
         # By asset type
         stats["by_asset_type"] = self.get_stats_by_asset_type()
         

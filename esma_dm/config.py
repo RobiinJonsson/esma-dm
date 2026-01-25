@@ -18,11 +18,22 @@ from esma_dm.utils.constants import (
 )
 
 
-def _get_project_root() -> Path:
-    """Get the project root directory (where this package is installed)."""
-    # Start from this file's location and go up to find the project root
-    # esma_dm/config.py -> esma_dm/ -> project_root/
-    return Path(__file__).parent.parent
+def _get_downloads_dir() -> Path:
+    """Get the downloads directory for cached CSV files."""
+    # Use downloads/data directory in the current working directory
+    cwd = Path.cwd()
+    downloads_dir = cwd / "downloads" / "data"
+    downloads_dir.mkdir(parents=True, exist_ok=True)
+    return downloads_dir
+
+
+def _get_database_dir() -> Path:
+    """Get the database directory within the package storage."""
+    # Use storage/duckdb/database directory within the package
+    package_dir = Path(__file__).parent  # esma_dm/
+    db_dir = package_dir / "storage" / "duckdb" / "database"
+    db_dir.mkdir(parents=True, exist_ok=True)
+    return db_dir
 
 
 @dataclass
@@ -44,7 +55,8 @@ class Config:
         BENCHMARKS_BASE_URL: Benchmarks Solr endpoint
     """
     
-    downloads_path: Path = field(default_factory=lambda: _get_project_root() / "downloads" / "data")
+    downloads_path: Path = field(default_factory=lambda: _get_downloads_dir())
+    database_path: Path = field(default_factory=lambda: _get_database_dir())
     cache_enabled: bool = True
     log_level: str = "INFO"
     temp_dir: Optional[Path] = None
@@ -72,11 +84,15 @@ class Config:
         if not self.downloads_path.exists():
             self.downloads_path.mkdir(parents=True, exist_ok=True)
         
-        # Create subdirectories for different data types
+        # Create subdirectories for different data types in downloads
         (self.downloads_path / "firds").mkdir(exist_ok=True)
         (self.downloads_path / "fitrs").mkdir(exist_ok=True)
         (self.downloads_path / "benchmarks").mkdir(exist_ok=True)
         (self.downloads_path / "ssr").mkdir(exist_ok=True)
+        
+        # Ensure database path exists
+        if not self.database_path.exists():
+            self.database_path.mkdir(parents=True, exist_ok=True)
         
         # Set temp_dir if not provided
         if self.temp_dir is None:
@@ -99,14 +115,14 @@ class Config:
         Example:
             >>> config = Config()
             >>> config.get_database_path('firds', 'current')
-            PosixPath('.../downloads/data/firds/firds_current.duckdb')
+            PosixPath('.../storage/duckdb/database/firds_current.duckdb')
         """
         mode = mode or self.mode
         if mode not in DATABASE_MODES.values():
             raise ValueError(f"Invalid mode '{mode}'. Must be one of: {list(DATABASE_MODES.values())}")
         
         db_name = f"{data_type}_{mode}.duckdb" if data_type == 'firds' else f"{data_type}.db"
-        return self.downloads_path / data_type / db_name
+        return self.database_path / db_name
     
     @classmethod
     def from_env(cls) -> "Config":

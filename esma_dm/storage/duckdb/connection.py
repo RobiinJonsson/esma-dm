@@ -16,18 +16,11 @@ from ... import config as global_config
 class DuckDBConnection:
     """Handles DuckDB connection and database initialization."""
     
-    def __init__(self, cache_dir: Path, db_path: Optional[str] = None, mode: str = 'current'):
+    def __init__(self, db_path: str, mode: str = 'current'):
         """Initialize DuckDB connection manager."""
-        self.cache_dir = cache_dir
         self.logger = logging.getLogger(__name__)
         self.mode = mode
-        
-        if db_path is None:
-            # Use mode-specific database name
-            db_name = f'firds_{mode}.duckdb'
-            self.db_path = str(self.cache_dir / db_name)
-        else:
-            self.db_path = db_path
+        self.db_path = db_path
         
         self.con = None
     
@@ -58,35 +51,26 @@ class DuckDBConnection:
         
         try:
             # Initialize schema based on mode
-            result = initialize_schema(self.con, mode=mode, verify_only=verify_only)
+            initialize_schema(self.con)
+            result = {"status": "initialized", "mode": mode}
             
             duration = time.time() - start_time
             
-            if verify_only:
-                self.logger.info(f"Schema verification completed in {duration:.2f}s")
-                return {
-                    "status": "verified",
-                    "mode": mode,
-                    "duration_seconds": duration,
-                    "database_path": self.db_path,
-                    "schema_info": result
-                }
-            else:
-                self.logger.info(f"Schema initialized in {duration:.2f}s")
-                
-                # Get basic stats
-                try:
-                    stats = self._get_basic_stats()
-                except Exception as e:
-                    self.logger.warning(f"Could not fetch stats: {e}")
-                    stats = {}
-                
-                return {
-                    "status": "initialized",
-                    "mode": mode,
-                    "duration_seconds": duration,
-                    "database_path": self.db_path,
-                    "existing_instruments": stats.get('instrument_count', 0),
+            self.logger.info(f"Schema initialized in {duration:.2f}s")
+            
+            # Get basic stats
+            try:
+                stats = self._get_basic_stats()
+            except Exception as e:
+                self.logger.warning(f"Could not fetch stats: {e}")
+                stats = {}
+            
+            return {
+                "status": "initialized",
+                "mode": mode,
+                "duration_seconds": duration,
+                "database_path": self.db_path,
+                "existing_instruments": stats.get('instrument_count', 0),
                     "schema_info": result
                 }
                 

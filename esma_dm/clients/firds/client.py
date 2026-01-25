@@ -91,7 +91,11 @@ class FIRDSClient:
         if self._data_store is None:
             cache_dir = self.config.downloads_path / 'firds'
             cache_dir.mkdir(parents=True, exist_ok=True)
-            self._data_store = DuckDBStorage(cache_dir, db_path=self.db_path, mode=self.mode)
+            
+            # Get proper database path from config
+            db_path = self.db_path or str(self.config.get_database_path('firds', self.mode))
+            
+            self._data_store = DuckDBStorage(cache_dir, db_path=db_path, mode=self.mode)
         
         return self._data_store
     
@@ -183,7 +187,36 @@ class FIRDSClient:
         file_type: str = 'FULINS',
         delete_csv: bool = False
     ) -> Dict:
-        """Index downloaded CSV files into the database."""
+        """Index downloaded CSV files into the database with mode validation."""
+        # Mode-based file type validation
+        if self.mode == 'current' and file_type != 'FULINS':
+            raise ValueError(f"Current mode only supports FULINS files, not {file_type}. Use history mode for DLTINS processing.")
+        
+        # Check if appropriate files exist
+        cache_dir = self.config.downloads_path / 'firds'
+        if asset_type:
+            pattern = f"{file_type}_{asset_type}_*_data.csv"
+        else:
+            pattern = f"{file_type}_*_data.csv"
+        
+        existing_files = list(cache_dir.glob(pattern))
+        
+        if not existing_files and file_type == 'FULINS':
+            self.logger.warning(f"No FULINS files found for asset_type={asset_type}. Downloading latest files...")
+            try:
+                self.get_latest_full_files(asset_type=asset_type or 'E', update=True)
+                self.logger.info("Download completed. Proceeding with indexing...")
+            except Exception as e:
+                self.logger.error(f"Failed to download FULINS files: {e}")
+                return {
+                    'total_instruments': 0,
+                    'total_listings': 0,
+                    'files_processed': 0,
+                    'files_skipped': 0,
+                    'failed_files': [f"Download failed: {e}"],
+                    'asset_types_processed': []
+                }
+        
         return self.parser.index_cached_files(
             asset_type=asset_type, latest_only=latest_only, 
             file_type=file_type, delete_csv=delete_csv
@@ -218,6 +251,9 @@ class FIRDSClient:
         update: bool = False
     ) -> Dict:
         """Download and process delta files with version management (history mode only)."""
+        if self.mode != 'history':
+            raise ValueError(f"Delta file processing is only available in history mode, not {self.mode} mode.")
+        
         return self.delta_processor.process_delta_files(
             asset_type=asset_type, date_from=date_from, date_to=date_to, update=update
         )

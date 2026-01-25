@@ -9,48 +9,36 @@ from .base import Instrument
 @dataclass
 class EquityInstrument(Instrument):
     """
-    Equity instrument (shares, stocks, etc.) with equity-specific attributes.
+    Equity instrument (shares, stocks, etc.) based on actual FIRDS data structure.
     
     Covers CFI codes starting with 'E' (Equities).
+    Most equity data is in the base Instrument class. Very few equity-specific fields exist in FIRDS.
     """
     
-    # Equity-specific attributes
-    dividend_payment_frequency: Optional[str] = None
-    """Frequency of dividend payments"""
+    # Actual equity-specific attributes from FIRDS
+    underlying_instrument: Optional[str] = None
+    """Underlying instrument ISIN (RefData_DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN) - for equity derivatives"""
     
-    voting_rights_per_share: Optional[str] = None
-    """Voting rights per share (e.g., DVOT=Voting, DNVT=Non-voting, DVTX=Voting/No voting)"""
-    
-    ownership_restriction: Optional[str] = None
-    """Ownership restrictions on the equity"""
-    
-    redemption_type: Optional[str] = None
-    """Redemption type (e.g., REDF=Redeemable/Callable, NRDF=Non-redeemable)"""
-    
-    capital_investment_restriction: Optional[str] = None
+    commodity_derivative_indicator: Optional[bool] = None
+    """Commodity derivative indicator (RefData_FinInstrmGnlAttrbts_CmmdtyDerivInd)"""
     """Capital investment restrictions"""
     
     @property
-    def has_voting_rights(self) -> bool:
-        """Check if this equity has voting rights."""
-        if self.voting_rights_per_share is None:
-            return False
-        return self.voting_rights_per_share in ('DVOT', 'DVTX')
+    def is_commodity_derivative(self) -> bool:
+        """Check if this equity is a commodity derivative."""
+        return self.commodity_derivative_indicator is True
     
     @property
-    def is_redeemable(self) -> bool:
-        """Check if this equity is redeemable."""
-        return self.redemption_type == 'REDF'
+    def has_underlying(self) -> bool:
+        """Check if this equity has an underlying instrument."""
+        return self.underlying_instrument is not None
     
     @classmethod
     def get_schema(cls) -> dict:
-        """Get schema information for equity-specific fields."""
+        """Get schema information for equity-specific fields based on actual FIRDS data."""
         base_schema = super().get_schema()
         equity_schema = {
-            'dividend_payment_frequency': {'type': 'str', 'description': 'Frequency of dividend payments'},
-            'voting_rights_per_share': {'type': 'str', 'description': 'Voting rights per share (e.g., DVOT=Voting, DNVT=Non-voting, DVTX=Voting/No voting)'},
-            'ownership_restriction': {'type': 'str', 'description': 'Ownership restrictions on the equity'},
-            'redemption_type': {'type': 'str', 'description': 'Redemption type (e.g., REDF=Redeemable/Callable, NRDF=Non-redeemable)'},
-            'capital_investment_restriction': {'type': 'str', 'description': 'Capital investment restrictions'},
+            'underlying_instrument': {'type': 'str', 'description': 'Underlying instrument ISIN (for equity derivatives)'},
+            'commodity_derivative_indicator': {'type': 'bool', 'description': 'Commodity derivative indicator from FIRDS'},
         }
         return {**base_schema, **equity_schema}
