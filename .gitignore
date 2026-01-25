@@ -127,6 +127,9 @@ dmypy.json
 *.csv
 *.xml
 *.zip
+*.duckdb
+*.db
+downloads/data/
 
 # IDE
 .vscode/
