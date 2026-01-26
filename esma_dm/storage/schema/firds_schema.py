@@ -17,6 +17,10 @@ def create_master_table(con):
             short_name VARCHAR,
             currency VARCHAR,
             
+            -- Technical attributes (ESMA RTS 23)
+            competent_authority VARCHAR,
+            publication_date DATE,
+            
             -- Historical tracking (ESMA Section 8)
             valid_from_date DATE,
             valid_to_date DATE,

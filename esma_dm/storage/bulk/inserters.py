@@ -34,6 +34,8 @@ class BulkInserter:
             'full_name': df['full_name'] if 'full_name' in df.columns else pd.Series([None] * len(df)),
             'short_name': df['short_name'] if 'short_name' in df.columns else pd.Series([None] * len(df)),
             'currency': df['currency'] if 'currency' in df.columns else pd.Series([None] * len(df)),
+            'competent_authority': df['competent_authority'] if 'competent_authority' in df.columns else pd.Series([None] * len(df)),
+            'publication_date': df['publication_date'] if 'publication_date' in df.columns else pd.Series([None] * len(df)),
             'valid_from_date': df['valid_from_date'] if 'valid_from_date' in df.columns else pd.Series([None] * len(df)),
             'valid_to_date': df['valid_to_date'] if 'valid_to_date' in df.columns else pd.Series([None] * len(df)),
             'latest_record_flag': pd.Series([True] * len(df)),
@@ -55,6 +57,7 @@ class BulkInserter:
                 insert_query = """
                     INSERT OR IGNORE INTO instruments 
                     (isin, cfi_code, instrument_type, issuer, full_name, short_name, currency,
+                     competent_authority, publication_date,
                      valid_from_date, valid_to_date, latest_record_flag, record_type,
                      version_number, source_file, source_file_type, last_update_timestamp,
                      inconsistency_indicator, indexed_at)
@@ -186,8 +189,8 @@ class BulkInserter:
             'commodity_base_product': df['commodity_base_product'] if 'commodity_base_product' in df.columns else pd.Series([None] * len(df)),
             'commodity_sub_product': df['commodity_sub_product'] if 'commodity_sub_product' in df.columns else pd.Series([None] * len(df)),
             'commodity_additional_sub_product': df['commodity_additional_sub_product'] if 'commodity_additional_sub_product' in df.columns else pd.Series([None] * len(df)),
-            'competent_authority': pd.Series([None] * len(df)),
-            'publication_date': pd.Series([None] * len(df))
+            'competent_authority': df['competent_authority'] if 'competent_authority' in df.columns else pd.Series([None] * len(df)),
+            'publication_date': df['publication_date'] if 'publication_date' in df.columns else pd.Series([None] * len(df))
         })
         
         futures_df = futures_df.dropna(subset=['isin'])
@@ -230,8 +233,8 @@ class BulkInserter:
             'delivery_type': df['delivery_type'] if 'delivery_type' in df.columns else pd.Series([None] * len(df)),
             'fx_type': pd.Series([None] * len(df)),
             'other_notional_currency': pd.Series([None] * len(df)),
-            'competent_authority': pd.Series([None] * len(df)),
-            'publication_date': pd.Series([None] * len(df)),
+            'competent_authority': df['competent_authority'] if 'competent_authority' in df.columns else pd.Series([None] * len(df)),
+            'publication_date': df['publication_date'] if 'publication_date' in df.columns else pd.Series([None] * len(df)),
             'version_number': pd.Series([1] * len(df))
         })
         
@@ -282,8 +285,8 @@ class BulkInserter:
             'commodity_base_product': df['commodity_base_product'] if 'commodity_base_product' in df.columns else pd.Series([None] * len(df)),
             'commodity_sub_product': df['commodity_sub_product'] if 'commodity_sub_product' in df.columns else pd.Series([None] * len(df)),
             'commodity_additional_sub_product': df['commodity_additional_sub_product'] if 'commodity_additional_sub_product' in df.columns else pd.Series([None] * len(df)),
-            'competent_authority': pd.Series([None] * len(df)),
-            'publication_date': pd.Series([None] * len(df)),
+            'competent_authority': df['competent_authority'] if 'competent_authority' in df.columns else pd.Series([None] * len(df)),
+            'publication_date': df['publication_date'] if 'publication_date' in df.columns else pd.Series([None] * len(df)),
             'version_number': pd.Series([1] * len(df))
         })
         
@@ -331,8 +334,8 @@ class BulkInserter:
             'commodity_additional_sub_product': df['commodity_additional_sub_product'] if 'commodity_additional_sub_product' in df.columns else pd.Series([None] * len(df)),
             'fx_type': df['fx_type'] if 'fx_type' in df.columns else pd.Series([None] * len(df)),
             'fx_other_notional_currency': df['fx_other_notional_currency'] if 'fx_other_notional_currency' in df.columns else pd.Series([None] * len(df)),
-            'competent_authority': pd.Series([None] * len(df)),
-            'publication_date': pd.Series([None] * len(df)),
+            'competent_authority': df['competent_authority'] if 'competent_authority' in df.columns else pd.Series([None] * len(df)),
+            'publication_date': df['publication_date'] if 'publication_date' in df.columns else pd.Series([None] * len(df)),
             'version_number': pd.Series([1] * len(df))
         })
         
@@ -369,8 +372,8 @@ class BulkInserter:
             'isin': df['isin'] if 'isin' in df.columns else pd.Series([None] * len(df)),
             'short_name': df['short_name'] if 'short_name' in df.columns else pd.Series([None] * len(df)),
             'underlying_isin': df['underlying_isin'] if 'underlying_isin' in df.columns else pd.Series([None] * len(df)),
-            'competent_authority': pd.Series([None] * len(df)),
-            'publication_date': pd.Series([None] * len(df)),
+            'competent_authority': df['competent_authority'] if 'competent_authority' in df.columns else pd.Series([None] * len(df)),
+            'publication_date': df['publication_date'] if 'publication_date' in df.columns else pd.Series([None] * len(df)),
             'version_number': pd.Series([1] * len(df))
         })
         
@@ -398,8 +401,8 @@ class BulkInserter:
             'commodity_additional_sub_product': df['commodity_additional_sub_product'] if 'commodity_additional_sub_product' in df.columns else pd.Series([None] * len(df)),
             'transaction_type': pd.Series([None] * len(df)),
             'final_price_type': pd.Series([None] * len(df)),
-            'competent_authority': pd.Series([None] * len(df)),
-            'publication_date': pd.Series([None] * len(df)),
+            'competent_authority': df['competent_authority'] if 'competent_authority' in df.columns else pd.Series([None] * len(df)),
+            'publication_date': df['publication_date'] if 'publication_date' in df.columns else pd.Series([None] * len(df)),
             'version_number': pd.Series([1] * len(df))
         })
         

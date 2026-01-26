@@ -101,6 +101,11 @@ class DuckDBOperations:
         name_col = self._find_column(df, ['RefData_FinInstrmGnlAttrbts_FullNm', 'FullNm', 'FullName', 'full_name', 'Name'])
         short_name_col = self._find_column(df, ['RefData_FinInstrmGnlAttrbts_ShrtNm', 'ShrtNm', 'ShortName', 'short_name'])
         issuer_col = self._find_column(df, ['RefData_Issr', 'Issr', 'Issuer', 'issuer'])
+        currency_col = self._find_column(df, ['RefData_FinInstrmGnlAttrbts_NtnlCcy', 'NtnlCcy', 'Currency', 'currency'])
+        
+        # Technical attributes
+        competent_authority_col = self._find_column(df, ['RefData_TechAttrbts_RlvntCmptntAuthrty'])
+        publication_date_col = self._find_column(df, ['RefData_TechAttrbts_PblctnPrd_FrDt'])
         
         # Asset-specific fields from actual FIRDS data
         # Equity fields
@@ -155,6 +160,9 @@ class DuckDBOperations:
         master_df['full_name'] = df[name_col] if name_col else None
         master_df['short_name'] = df[short_name_col] if short_name_col else None
         master_df['issuer'] = df[issuer_col] if issuer_col else None
+        master_df['currency'] = df[currency_col] if currency_col else None
+        master_df['competent_authority'] = df[competent_authority_col] if competent_authority_col else None
+        master_df['publication_date'] = pd.to_datetime(df[publication_date_col], errors='coerce') if publication_date_col else None
         master_df['source_file'] = source_file
         master_df['indexed_at'] = pd.Timestamp.now()
         
@@ -202,8 +210,6 @@ class DuckDBOperations:
     def _insert_listings(self, df: pd.DataFrame, source_file: str):
         """Insert market listings if trading venue columns are present."""
         self.logger.debug(f"_insert_listings called for {source_file} with {len(df)} rows")
-        print(f"[DEBUG] _insert_listings: {len(df)} rows from {source_file}")
-        print(f"[DEBUG] Available columns: {list(df.columns)[:10]}...")  # Show first 10 columns
         
         # Map listing columns using actual FIRDS CSV column names
         isin_col = self._find_column(df, ['Id', 'ISIN', 'isin'])
@@ -214,11 +220,8 @@ class DuckDBOperations:
             'trading_venue'
         ])
         
-        print(f"[DEBUG] Found columns - ISIN: {isin_col}, Venue: {venue_col}")
-        
         if not all([isin_col, venue_col]):
             self.logger.debug(f"Missing required columns for listings - ISIN: {isin_col}, Venue: {venue_col}")
-            print(f"[DEBUG] Skipping listings - missing required columns")
             return
         
         # Map additional listing columns
@@ -243,11 +246,8 @@ class DuckDBOperations:
         # Remove rows with null required values
         listings_df = listings_df.dropna(subset=['isin', 'trading_venue_id'])
         
-        print(f"[DEBUG] After dropna: {len(listings_df)} listings remaining")
-        
         if len(listings_df) == 0:
             self.logger.debug("No valid listings data to insert")
-            print(f"[DEBUG] No valid listings data after dropna")
             return
         
         # Insert into listings table
@@ -268,7 +268,6 @@ class DuckDBOperations:
             """
             
             result = self.con.execute(insert_query)
-            print(f"[DEBUG] INSERT executed, rows affected: {len(listings_df)}")
             self.logger.info(f"Inserted {len(listings_df)} market listings")
             
         except Exception as e:
@@ -299,10 +298,10 @@ class DuckDBOperations:
         try:
             # Load CSV with error handling for different encodings
             try:
-                df = pd.read_csv(csv_path, encoding='utf-8')
+                df = pd.read_csv(csv_path, encoding='utf-8', low_memory=False)
             except UnicodeDecodeError:
                 self.logger.warning(f"UTF-8 decode failed for {csv_path}, trying ISO-8859-1")
-                df = pd.read_csv(csv_path, encoding='iso-8859-1')
+                df = pd.read_csv(csv_path, encoding='iso-8859-1', low_memory=False)
             
             if len(df) == 0:
                 self.logger.warning(f"Empty CSV file: {csv_path}")

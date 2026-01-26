@@ -19,13 +19,12 @@ print("\n[2/3] Reinitializing database...")
 firds.data_store.drop(confirm=True)
 firds.data_store.initialize()
 
-# Index all cached files
+# Index all cached files from latest date
 print("\n[3/3] Indexing all cached files from latest date...")
-print("\nThis will process ALL files from the latest date for all 10 asset types")
-print("Using cached files for fast processing...\n")
+print("Processing ALL asset types (C, D, E, F, H, I, J, O, R, S)...\n")
 
 try:
-    result = firds.index_cached_files()  # latest_only=True by default
+    result = firds.index_cached_files(latest_only=True)
     print(f"\nIndexing complete!")
     print(f"  Files processed: {result.get('files_processed', 0)}")
     print(f"  Files skipped: {result.get('files_skipped', 0)}")

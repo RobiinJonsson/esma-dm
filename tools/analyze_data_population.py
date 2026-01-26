@@ -31,11 +31,13 @@ def get_data_directories():
 def select_file_pattern():
     """Let user select file pattern to analyze."""
     patterns = {
-        '1': ('FULINS', 'Full instrument files'),
-        '2': ('DLTINS', 'Delta instrument files'), 
-        '3': ('FULECR', 'Full ECR files'),
-        '4': ('FULNCR', 'Full NCR files'),
-        '5': ('ALL', 'All CSV files')
+        '1': ('FULINS', 'Full instrument files (FIRDS)'),
+        '2': ('DLTINS', 'Delta instrument files (FIRDS)'), 
+        '3': ('FULECR', 'Full ECR files (FITRS - Equity)'),
+        '4': ('FULNCR', 'Full NCR files (FITRS - Non-Equity)'),
+        '5': ('DLTECR', 'Delta ECR files (FITRS)'),
+        '6': ('DLTNCR', 'Delta NCR files (FITRS)'),
+        '7': ('ALL', 'All CSV files')
     }
     
     print("📋 SELECT FILE PATTERN TO ANALYZE")
@@ -44,10 +46,10 @@ def select_file_pattern():
         print(f"{key}. {pattern} - {desc}")
     
     while True:
-        choice = input("\nEnter choice (1-5): ").strip()
+        choice = input("\nEnter choice (1-7): ").strip()
         if choice in patterns:
             return patterns[choice][0]
-        print("Invalid choice. Please select 1-5.")
+        print("Invalid choice. Please select 1-7.")
 
 def analyze_csv_file(file_path, max_rows=10000):
     """Analyze a single CSV file for data population."""
@@ -183,21 +185,20 @@ def save_analysis_report(analysis_data, pattern, output_dir):
                     reverse=True
                 )
                 
-                f.write("Column                                    Populated    Non-Null  Sample Values\n")
-                f.write("-" * 100 + "\n")
+                f.write("Column Name                                                  Populated    Non-Null  Sample Values\n")
+                f.write("-" * 130 + "\n")
                 
                 for col_name, stats in columns_sorted:
                     pct = stats['populated_percentage']
                     count = stats['non_null_count']
                     samples = str(stats['sample_values'][:2])  # First 2 samples
                     
-                    # Truncate long column names and samples
-                    col_display = col_name[:40].ljust(40)
+                    # Format displays without truncating column names
                     pct_display = f"{pct:6.1f}%".rjust(10)
                     count_display = f"{count:,}".rjust(8)
                     sample_display = samples[:45] + "..." if len(samples) > 45 else samples
                     
-                    f.write(f"{col_display} {pct_display} {count_display}  {sample_display}\n")
+                    f.write(f"{col_name:<60} {pct_display} {count_display}  {sample_display}\n")
                 
                 f.write("\n")
         
@@ -248,22 +249,21 @@ def save_analysis_report(analysis_data, pattern, output_dir):
                 )
                 
                 af.write("COLUMN POPULATION SUMMARY\n")
-                af.write("-" * 80 + "\n")
-                af.write("Column Name                               Overall%  Non-Null    Files  Sample Values\n")
-                af.write("-" * 120 + "\n")
+                af.write("-" * 130 + "\n")
+                af.write("Column Name                                                  Overall%  Non-Null    Files  Sample Values\n")
+                af.write("-" * 150 + "\n")
                 
                 for col_name, data in columns_sorted:
                     overall_pct = (data['total_non_null'] / max(1, data['total_possible'])) * 100
                     files_count = len(data['files'])
                     samples = list(data['sample_values'])[:3]
                     
-                    col_display = col_name[:40].ljust(40)
                     pct_display = f"{overall_pct:6.1f}%".rjust(9)
                     count_display = f"{data['total_non_null']:,}".rjust(9)
                     files_display = str(files_count).rjust(5)
                     sample_display = str(samples)[:50] + "..." if len(str(samples)) > 50 else str(samples)
                     
-                    af.write(f"{col_display} {pct_display} {count_display} {files_display}  {sample_display}\n")
+                    af.write(f"{col_name:<60} {pct_display} {count_display} {files_display}  {sample_display}\n")
     
     print(f"✅ Analysis reports saved to {output_dir}")
     print(f"   📄 Summary: {summary_file.name}")
