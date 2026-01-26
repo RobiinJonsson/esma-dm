@@ -17,9 +17,10 @@ from esma_dm.utils.constants import FIRDS_SOLR_URL
 class FIRDSDownloader:
     """Handles downloading and file management for FIRDS data."""
     
-    def __init__(self, config, date_from: str, date_to: str, limit: int = 1000):
+    def __init__(self, config, firds_config, date_from: str, date_to: str, limit: int):
         """Initialize downloader with configuration."""
         self.config = config
+        self.firds_config = firds_config
         self.date_from = date_from
         self.date_to = date_to
         self.limit = limit
@@ -55,7 +56,8 @@ class FIRDSDownloader:
             - download_link: URL to download file
         
         Example:
-            >>> downloader = FIRDSDownloader(config, '2024-01-01', '2024-12-31')
+            >>> # Downloader is typically initialized by FIRDSClient
+            >>> # with appropriate configuration
             >>> files = downloader.get_file_list()
             >>> equity_fulins = downloader.get_file_list(file_type='FULINS', asset_type='E')
         """
@@ -114,7 +116,9 @@ class FIRDSDownloader:
         self,
         asset_type: str = "E",
         isin_filter: Optional[List[str]] = None,
-        update: bool = False
+        update: bool = False,
+        auto_cleanup: bool = False,
+        keep_files: int = 2
     ) -> pd.DataFrame:
         """
         Retrieve the latest full FIRDS files for a specific asset type.
@@ -124,15 +128,19 @@ class FIRDSDownloader:
             asset_type: CFI first character (C, D, E, F, H, I, J, O, R, S)
             isin_filter: Optional list of ISINs to filter results
             update: Force re-download of files (default: False, use cached data)
+            auto_cleanup: Automatically remove old cached files after download
+            keep_files: Number of newest files to keep during cleanup (default: 2)
         
         Returns:
             DataFrame containing instrument reference data
         
         Example:
             >>> equities = downloader.get_latest_full_files(asset_type='E')
-            >>> my_stocks = downloader.get_latest_full_files(
-            ...     asset_type='E',
-            ...     isin_filter=['GB00B1YW4409', 'US0378331005']
+            >>> # Download with automatic cleanup
+            >>> equities = downloader.get_latest_full_files(
+            ...     asset_type='E', 
+            ...     update=True, 
+            ...     auto_cleanup=True
             ... )
         """
         # Validate asset type
@@ -143,7 +151,7 @@ class FIRDSDownloader:
             raise ValueError(f"Invalid asset_type '{asset_type}'. Must be one of: {valid_types}")
         
         # Check for newer cached files first (unless update=True)
-        if not update:
+        if not update and self.firds_config.cache_enabled:
             cached_data = self._check_cached_files(asset_type)
             if cached_data is not None:
                 # Apply ISIN filter if provided
@@ -190,6 +198,16 @@ class FIRDSDownloader:
         
         result = pd.concat(dfs, ignore_index=True)
         self.logger.info(f"Retrieved {len(result)} instruments")
+        
+        # Perform cleanup if requested
+        if auto_cleanup:
+            cleanup_result = self.cleanup_old_files(
+                asset_type=asset_type, 
+                keep_count=keep_files,
+                file_type='FULINS'
+            )
+            self.logger.info(f"Cleanup completed: {cleanup_result['message']}")
+        
         return result
     
     def _check_cached_files(self, asset_type: str) -> Optional[pd.DataFrame]:
@@ -460,3 +478,64 @@ class FIRDSDownloader:
         
         self.logger.info(f"Consolidated {len(df)} unique instruments for asset type {asset_type}")
         return df
+    
+    def cleanup_old_files(
+        self,
+        asset_type: str,
+        keep_count: int = 2,
+        file_type: str = 'FULINS'
+    ) -> Dict[str, Any]:
+        """
+        Clean up old cached files, keeping only the most recent ones.
+        
+        Args:
+            asset_type: Asset type to clean up (E, D, C, etc.)
+            keep_count: Number of newest files to keep (default: 2)
+            file_type: File type pattern to clean ('FULINS' or 'DLTINS')
+            
+        Returns:
+            Dictionary with cleanup statistics
+        """
+        cache_dir = self.config.downloads_path / 'firds'
+        pattern = f"{file_type}_{asset_type}_*_data.csv"
+        
+        # Find all matching files
+        files = list(cache_dir.glob(pattern))
+        
+        if len(files) <= keep_count:
+            return {
+                'files_removed': 0,
+                'files_kept': len(files),
+                'space_freed_mb': 0,
+                'message': f'No cleanup needed (found {len(files)} files, keeping {keep_count})'
+            }
+        
+        # Sort by modification time (newest first)
+        files_by_time = sorted(files, key=lambda f: f.stat().st_mtime, reverse=True)
+        files_to_keep = files_by_time[:keep_count]
+        files_to_remove = files_by_time[keep_count:]
+        
+        # Calculate space that will be freed
+        space_freed = sum(f.stat().st_size for f in files_to_remove) / (1024 * 1024)
+        
+        # Remove old files
+        removed_files = []
+        for file_path in files_to_remove:
+            try:
+                file_size_mb = file_path.stat().st_size / (1024 * 1024)
+                file_path.unlink()
+                removed_files.append(file_path.name)
+                self.logger.info(f"Removed old file: {file_path.name} ({file_size_mb:.1f} MB)")
+            except Exception as e:
+                self.logger.warning(f"Failed to remove {file_path.name}: {e}")
+        
+        kept_files = [f.name for f in files_to_keep]
+        
+        return {
+            'files_removed': len(removed_files),
+            'files_kept': len(kept_files),
+            'space_freed_mb': space_freed,
+            'removed_files': removed_files,
+            'kept_files': kept_files,
+            'message': f'Cleaned up {len(removed_files)} old files, freed {space_freed:.1f} MB'
+        }

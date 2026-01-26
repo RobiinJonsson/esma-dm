@@ -26,9 +26,9 @@ def main():
     firds.data_store.drop(confirm=True)
     firds.data_store.initialize(mode='current')
     
-    # Example 1: Index only equities (latest only)
-    print("\n3. Indexing latest equity files only...")
-    result = firds.index_cached_files(asset_type='E', latest_only=True)
+    # Example 1: Index only collective investment vehicles (latest only)
+    print("\n3. Indexing latest collective investment files only...")
+    result = firds.index_cached_files(asset_type='C', latest_only=True)
     
     print(f"\n   Files processed: {result['files_processed']}")
     print(f"   Files skipped: {result['files_skipped']}")
@@ -37,8 +37,8 @@ def main():
     print(f"   Asset types: {result['asset_types_processed']}")
     
     # Check database stats
-    stats = firds.get_store_stats()
-    print(f"\n   Database total: {stats['total_instruments']:,} instruments")
+    stats = firds.get_database_stats()
+    print(f"\n   Database total: {stats.get('total_instruments', 0):,} instruments")
     
     # Example 2: Add debt instruments
     print("\n4. Adding latest debt instrument files...")
@@ -49,8 +49,8 @@ def main():
     print(f"   Listings added: {result['total_listings']:,}")
     
     # Check updated stats
-    stats = firds.get_store_stats()
-    print(f"\n   Database total: {stats['total_instruments']:,} instruments")
+    stats = firds.get_database_stats()
+    print(f"\n   Database total: {stats.get('total_instruments', 0):,} instruments")
     
     # Example 3: Show all cached files (would process if latest_only=False)
     print("\n5. Checking what would happen with latest_only=False...")

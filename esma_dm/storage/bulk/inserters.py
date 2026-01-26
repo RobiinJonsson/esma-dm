@@ -24,8 +24,6 @@ class BulkInserter:
     
     def insert_instruments(self, df: pd.DataFrame):
         """Bulk insert into main instruments table."""
-        print(f"[DEBUG] Inserting {len(df)} instruments into main table")
-        print(f"[DEBUG] Available columns: {list(df.columns)}")
         
         # Map processed DataFrame columns to instruments table schema
         instruments_df = pd.DataFrame({
@@ -52,7 +50,6 @@ class BulkInserter:
         instruments_df = instruments_df.dropna(subset=['isin'])
         
         if len(instruments_df) > 0:
-            print(f"[DEBUG] Attempting to insert {len(instruments_df)} main instruments")
             try:
                 # Use INSERT OR IGNORE to handle duplicates
                 insert_query = """
@@ -67,19 +64,17 @@ class BulkInserter:
                 # Create temporary view and insert
                 self.con.execute("CREATE OR REPLACE VIEW instruments_temp AS SELECT * FROM instruments_df")
                 self.con.execute(insert_query)
-                
-                print(f"[DEBUG] Successfully inserted main instruments")
+                return len(instruments_df)
             except Exception as e:
-                print(f"[DEBUG] Main instruments INSERT failed with error: {e}")
-                raise
+                self.logger.error(f"Failed to insert instruments: {e}")
+                return 0
         else:
-            print(f"[DEBUG] No valid main instruments to insert")
+            self.logger.warning("No valid main instruments to insert")
+            return 0
     
     def insert_equities(self, df: pd.DataFrame):
         """Bulk insert equity instruments (E) using processed DataFrame structure."""
         # Add debugging
-        print(f"[DEBUG] Processing equity DataFrame with shape: {df.shape}")
-        print(f"[DEBUG] Available columns: {list(df.columns)}")
         
         # Only insert equity-specific fields (general fields go in main instruments table)
         # Based on actual FIRDS data structure
@@ -91,12 +86,10 @@ class BulkInserter:
         })
         
         equity_df = equity_df.dropna(subset=['isin'])
-        print(f"[DEBUG] Equity DataFrame after processing: {equity_df.shape}")
-        print(f"[DEBUG] Sample equity data: {equity_df.head(2).to_dict('records') if len(equity_df) > 0 else 'No data'}")
         
         if len(equity_df) > 0:
-            print(f"[DEBUG] Attempting to insert {len(equity_df)} equity instruments")
             try:
+                self.con.register('equity_df', equity_df)
                 self.con.execute("""
                     INSERT INTO equity_instruments 
                     SELECT * FROM equity_df
@@ -105,17 +98,13 @@ class BulkInserter:
                         commodity_derivative_indicator = EXCLUDED.commodity_derivative_indicator,
                         version_number = EXCLUDED.version_number
                 """)
-                print(f"[DEBUG] INSERT query executed successfully")
             except Exception as e:
-                print(f"[DEBUG] INSERT failed with error: {e}")
-                raise
+                self.logger.error(f"Insert failed: {e}")
         else:
-            print(f"[DEBUG] No equity data to insert after filtering")
+            self.logger.debug("No data to insert after filtering")
     
     def insert_debt(self, df: pd.DataFrame):
         """Bulk insert debt instruments (D) using actual FIRDS data structure."""
-        print(f"[DEBUG] Processing debt DataFrame with shape: {df.shape}")
-        print(f"[DEBUG] Available columns: {list(df.columns)}")
         
         # Only insert debt-specific fields based on actual FIRDS structure
         debt_df = pd.DataFrame({
@@ -129,12 +118,10 @@ class BulkInserter:
         })
         
         debt_df = debt_df.dropna(subset=['isin'])
-        print(f"[DEBUG] Debt DataFrame after processing: {debt_df.shape}")
-        print(f"[DEBUG] Sample debt data: {debt_df.head(2).to_dict('records') if len(debt_df) > 0 else 'No data'}")
         
         if len(debt_df) > 0:
-            print(f"[DEBUG] Attempting to insert {len(debt_df)} debt instruments")
             try:
+                self.con.register('debt_df', debt_df)
                 self.con.execute("""
                     INSERT INTO debt_instruments 
                     SELECT * FROM debt_df
@@ -146,17 +133,13 @@ class BulkInserter:
                         debt_seniority = EXCLUDED.debt_seniority,
                         version_number = EXCLUDED.version_number
                 """)
-                print(f"[DEBUG] Debt INSERT query executed successfully")
             except Exception as e:
-                print(f"[DEBUG] Debt INSERT failed with error: {e}")
-                raise
+                self.logger.error(f"Insert failed: {e}")
         else:
-            print(f"[DEBUG] No debt data to insert after filtering")
+            self.logger.debug("No data to insert after filtering")
 
     def insert_swaps(self, df: pd.DataFrame):
         """Bulk insert swap instruments (S) using actual FIRDS data structure."""
-        print(f"[DEBUG] Processing swap DataFrame with shape: {df.shape}")
-        print(f"[DEBUG] Available columns: {list(df.columns)}")
         
         # Only insert swap-specific fields based on actual FIRDS structure
         swap_df = pd.DataFrame({
@@ -170,12 +153,10 @@ class BulkInserter:
         })
         
         swap_df = swap_df.dropna(subset=['isin'])
-        print(f"[DEBUG] Swap DataFrame after processing: {swap_df.shape}")
-        print(f"[DEBUG] Sample swap data: {swap_df.head(2).to_dict('records') if len(swap_df) > 0 else 'No data'}")
         
         if len(swap_df) > 0:
-            print(f"[DEBUG] Attempting to insert {len(swap_df)} swap instruments")
             try:
+                self.con.register('swap_df', swap_df)
                 self.con.execute("""
                     INSERT INTO swap_instruments 
                     SELECT * FROM swap_df
@@ -187,44 +168,32 @@ class BulkInserter:
                         underlying_instrument = EXCLUDED.underlying_instrument,
                         version_number = EXCLUDED.version_number
                 """)
-                print(f"[DEBUG] Swap INSERT query executed successfully")
             except Exception as e:
-                print(f"[DEBUG] Swap INSERT failed with error: {e}")
-                raise
+                self.logger.error(f"Insert failed: {e}")
         else:
-            print(f"[DEBUG] No swap data to insert after filtering")
+            self.logger.debug("No data to insert after filtering")
     
     def insert_futures(self, df: pd.DataFrame):
-        """Bulk insert futures instruments (F) using actual FIRDS data structure."""
-        # Use actual column names from population analysis
-        isin_col = self._find_column(df, ['Id'])
-        short_name_col = self._find_column(df, ['RefData_FinInstrmGnlAttrbts_ShrtNm'])
-        expiry_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_XpryDt'])
-        multiplier_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_PricMltplr'])
-        delivery_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_DlvryTp'])
-        underlying_isin_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_UndrlygInstrm'])
-        competent_auth_col = self._find_column(df, ['RefData_TechAttrbts_RlvntCmptntAuthrty'])
-        publication_date_col = self._find_column(df, ['RefData_TechAttrbts_PblctnPrd_FrDt'])
-        
+        """Bulk insert futures instruments (F). Expects DataFrame with data model column names."""
         futures_df = pd.DataFrame({
-            'isin': df[isin_col] if isin_col else pd.Series([None] * len(df)),
-            'short_name': df[short_name_col] if short_name_col else pd.Series([None] * len(df)),
-            'expiry_date': pd.to_datetime(df[expiry_col], errors='coerce') if expiry_col else pd.Series([None] * len(df)),
-            'price_multiplier': pd.to_numeric(df[multiplier_col], errors='coerce') if multiplier_col else pd.Series([None] * len(df)),
-            'underlying_isin': df[underlying_isin_col] if underlying_isin_col else pd.Series([None] * len(df)),
-            'underlying_index_name': pd.Series([None] * len(df)),        # Not available in analyzed data
-            'underlying_index_term_value': pd.Series([None] * len(df)),  # Not available in analyzed data
-            'underlying_index_term_unit': pd.Series([None] * len(df)),   # Not available in analyzed data
-            'notional_currency_1': pd.Series([None] * len(df)),          # Not available in analyzed data
-            'notional_currency_2': pd.Series([None] * len(df)),          # Not available in analyzed data
-            'delivery_type': df[delivery_col] if delivery_col else pd.Series([None] * len(df)),
-            'competent_authority': df[competent_auth_col] if competent_auth_col else pd.Series([None] * len(df)),
-            'publication_date': pd.to_datetime(df[publication_date_col], errors='coerce') if publication_date_col else pd.Series([None] * len(df))
+            'isin': df['isin'] if 'isin' in df.columns else pd.Series([None] * len(df)),
+            'short_name': df['short_name'] if 'short_name' in df.columns else pd.Series([None] * len(df)),
+            'expiry_date': df['expiry_date'] if 'expiry_date' in df.columns else pd.Series([None] * len(df)),
+            'price_multiplier': df['price_multiplier'] if 'price_multiplier' in df.columns else pd.Series([None] * len(df)),
+            'underlying_isin': df['underlying_isin'] if 'underlying_isin' in df.columns else pd.Series([None] * len(df)),
+            'underlying_index_name': df['underlying_index_name'] if 'underlying_index_name' in df.columns else pd.Series([None] * len(df)),
+            'delivery_type': df['delivery_type'] if 'delivery_type' in df.columns else pd.Series([None] * len(df)),
+            'commodity_base_product': df['commodity_base_product'] if 'commodity_base_product' in df.columns else pd.Series([None] * len(df)),
+            'commodity_sub_product': df['commodity_sub_product'] if 'commodity_sub_product' in df.columns else pd.Series([None] * len(df)),
+            'commodity_additional_sub_product': df['commodity_additional_sub_product'] if 'commodity_additional_sub_product' in df.columns else pd.Series([None] * len(df)),
+            'competent_authority': pd.Series([None] * len(df)),
+            'publication_date': pd.Series([None] * len(df))
         })
         
         futures_df = futures_df.dropna(subset=['isin'])
         
         if len(futures_df) > 0:
+            self.con.register('futures_df', futures_df)
             self.con.execute("""
                 INSERT INTO futures_instruments 
                 SELECT * FROM futures_df
@@ -241,100 +210,87 @@ class BulkInserter:
                     competent_authority = EXCLUDED.competent_authority,
                     publication_date = EXCLUDED.publication_date
             """)
-    
     def insert_options(self, df: pd.DataFrame):
-        """Bulk insert option instruments (O, H) using actual FIRDS data structure."""
-        # Use actual column names from population analysis
-        isin_col = self._find_column(df, ['Id'])
-        short_name_col = self._find_column(df, ['RefData_FinInstrmGnlAttrbts_ShrtNm'])
-        expiry_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_XpryDt'])
-        multiplier_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_PricMltplr'])
-        underlying_isin_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_UndrlygInstrm'])
-        option_type_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_OptnTp'])
-        exercise_style_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_OptnExrcStyle'])
-        delivery_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_DlvryTp'])
-        strike_price_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_StrkPric_Pric'])
-        competent_auth_col = self._find_column(df, ['RefData_TechAttrbts_RlvntCmptntAuthrty'])
-        publication_date_col = self._find_column(df, ['RefData_TechAttrbts_PblctnPrd_FrDt'])
-        
+        """Bulk insert option instruments (O). Expects DataFrame with data model column names."""
+        # Select relevant columns from master_df for option_instruments table
         option_df = pd.DataFrame({
-            'isin': df[isin_col] if isin_col else pd.Series([None] * len(df)),
-            'short_name': df[short_name_col] if short_name_col else pd.Series([None] * len(df)),
-            'expiry_date': pd.to_datetime(df[expiry_col], errors='coerce') if expiry_col else pd.Series([None] * len(df)),
-            'price_multiplier': pd.to_numeric(df[multiplier_col], errors='coerce') if multiplier_col else pd.Series([None] * len(df)),
-            'underlying_isin': df[underlying_isin_col] if underlying_isin_col else pd.Series([None] * len(df)),
-            'underlying_index_isin': pd.Series([None] * len(df)),         # Not available in analyzed data
-            'underlying_index_name': pd.Series([None] * len(df)),        # Not available in analyzed data
-            'option_type': df[option_type_col] if option_type_col else pd.Series([None] * len(df)),
-            'option_exercise_style': df[exercise_style_col] if exercise_style_col else pd.Series([None] * len(df)),
-            'strike_price': pd.to_numeric(df[strike_price_col], errors='coerce') if strike_price_col else pd.Series([None] * len(df)),
-            'strike_price_percentage': pd.Series([None] * len(df)),      # Not available in analyzed data
-            'strike_price_basis_points': pd.Series([None] * len(df)),    # Not available in analyzed data
-            'strike_price_currency': pd.Series([None] * len(df)),        # Not available in analyzed data
-            'delivery_type': df[delivery_col] if delivery_col else pd.Series([None] * len(df)),
-            'fx_type': pd.Series([None] * len(df)),                      # Not available in analyzed data
-            'other_notional_currency': pd.Series([None] * len(df)),      # Not available in analyzed data
-            'competent_authority': df[competent_auth_col] if competent_auth_col else pd.Series([None] * len(df)),
-            'publication_date': pd.to_datetime(df[publication_date_col], errors='coerce') if publication_date_col else pd.Series([None] * len(df))
+            'isin': df['isin'] if 'isin' in df.columns else pd.Series([None] * len(df)),
+            'short_name': df['short_name'] if 'short_name' in df.columns else pd.Series([None] * len(df)),
+            'expiry_date': df['expiry_date'] if 'expiry_date' in df.columns else pd.Series([None] * len(df)),
+            'price_multiplier': df['price_multiplier'] if 'price_multiplier' in df.columns else pd.Series([None] * len(df)),
+            'underlying_isin': df['underlying_isin'] if 'underlying_isin' in df.columns else pd.Series([None] * len(df)),
+            'underlying_index_isin': df['underlying_index_isin'] if 'underlying_index_isin' in df.columns else pd.Series([None] * len(df)),
+            'underlying_index_name': df['underlying_index_name'] if 'underlying_index_name' in df.columns else pd.Series([None] * len(df)),
+            'option_type': df['option_type'] if 'option_type' in df.columns else pd.Series([None] * len(df)),
+            'option_exercise_style': df['option_exercise_style'] if 'option_exercise_style' in df.columns else pd.Series([None] * len(df)),
+            'strike_price': df['strike_price'] if 'strike_price' in df.columns else pd.Series([None] * len(df)),
+            'strike_price_percentage': df['strike_price_percentage'] if 'strike_price_percentage' in df.columns else pd.Series([None] * len(df)),
+            'strike_price_basis_points': df['strike_price_basis_points'] if 'strike_price_basis_points' in df.columns else pd.Series([None] * len(df)),
+            'strike_price_currency': pd.Series([None] * len(df)),
+            'delivery_type': df['delivery_type'] if 'delivery_type' in df.columns else pd.Series([None] * len(df)),
+            'fx_type': pd.Series([None] * len(df)),
+            'other_notional_currency': pd.Series([None] * len(df)),
+            'competent_authority': pd.Series([None] * len(df)),
+            'publication_date': pd.Series([None] * len(df)),
+            'version_number': pd.Series([1] * len(df))
         })
         
         option_df = option_df.dropna(subset=['isin'])
         
         if len(option_df) > 0:
-            self.con.execute("""
-                INSERT INTO option_instruments 
-                SELECT * FROM option_df
-                ON CONFLICT (isin) DO UPDATE SET
-                    short_name = EXCLUDED.short_name,
-                    expiry_date = EXCLUDED.expiry_date,
-                    price_multiplier = EXCLUDED.price_multiplier,
-                    underlying_isin = EXCLUDED.underlying_isin,
-                    underlying_index_isin = EXCLUDED.underlying_index_isin,
-                    underlying_index_name = EXCLUDED.underlying_index_name,
-                    option_type = EXCLUDED.option_type,
-                    option_exercise_style = EXCLUDED.option_exercise_style,
-                    strike_price = EXCLUDED.strike_price,
-                    strike_price_percentage = EXCLUDED.strike_price_percentage,
-                    strike_price_basis_points = EXCLUDED.strike_price_basis_points,
-                    strike_price_currency = EXCLUDED.strike_price_currency,
-                    delivery_type = EXCLUDED.delivery_type,
-                    fx_type = EXCLUDED.fx_type,
-                    other_notional_currency = EXCLUDED.other_notional_currency,
-                    competent_authority = EXCLUDED.competent_authority,
-                    publication_date = EXCLUDED.publication_date
-            """)
+            try:
+                self.con.register('option_df', option_df)
+                self.con.execute("""
+                    INSERT INTO option_instruments 
+                    SELECT * FROM option_df
+                    ON CONFLICT (isin) DO UPDATE SET
+                        short_name = EXCLUDED.short_name,
+                        expiry_date = EXCLUDED.expiry_date,
+                        price_multiplier = EXCLUDED.price_multiplier,
+                        underlying_isin = EXCLUDED.underlying_isin,
+                        underlying_index_isin = EXCLUDED.underlying_index_isin,
+                        underlying_index_name = EXCLUDED.underlying_index_name,
+                        option_type = EXCLUDED.option_type,
+                        option_exercise_style = EXCLUDED.option_exercise_style,
+                        strike_price = EXCLUDED.strike_price,
+                        strike_price_percentage = EXCLUDED.strike_price_percentage,
+                        strike_price_basis_points = EXCLUDED.strike_price_basis_points,
+                        strike_price_currency = EXCLUDED.strike_price_currency,
+                        delivery_type = EXCLUDED.delivery_type,
+                        fx_type = EXCLUDED.fx_type,
+                        other_notional_currency = EXCLUDED.other_notional_currency,
+                        competent_authority = EXCLUDED.competent_authority,
+                        publication_date = EXCLUDED.publication_date
+                """)
+            except Exception as e:
+                raise RuntimeError(f"Failed to insert option instruments: {e}")
     
     def insert_forwards(self, df: pd.DataFrame):
-        """Bulk insert forward instruments (J) using actual FIRDS data structure."""
-        # Use actual column names from population analysis
-        isin_col = self._find_column(df, ['Id'])
-        short_name_col = self._find_column(df, ['RefData_FinInstrmGnlAttrbts_ShrtNm'])
-        expiry_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_XpryDt'])
-        multiplier_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_PricMltplr'])
-        delivery_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_DlvryTp'])
-        underlying_isin_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_UndrlygInstrm'])
-        competent_auth_col = self._find_column(df, ['RefData_TechAttrbts_RlvntCmptntAuthrty'])
-        publication_date_col = self._find_column(df, ['RefData_TechAttrbts_PblctnPrd_FrDt'])
-        
+        """Bulk insert forward instruments (J). Expects DataFrame with data model column names."""
         forward_df = pd.DataFrame({
-            'isin': df[isin_col] if isin_col else pd.Series([None] * len(df)),
-            'short_name': df[short_name_col] if short_name_col else pd.Series([None] * len(df)),
-            'expiry_date': pd.to_datetime(df[expiry_col], errors='coerce') if expiry_col else pd.Series([None] * len(df)),
-            'price_multiplier': pd.to_numeric(df[multiplier_col], errors='coerce') if multiplier_col else pd.Series([None] * len(df)),
-            'underlying_isin': df[underlying_isin_col] if underlying_isin_col else pd.Series([None] * len(df)),
-            'underlying_index_isin': pd.Series([None] * len(df)),        # Not available in analyzed data
-            'underlying_index_name': pd.Series([None] * len(df)),        # Not available in analyzed data
-            'underlying_basket_isin': pd.Series([None] * len(df)),       # Not available in analyzed data
-            'delivery_type': df[delivery_col] if delivery_col else pd.Series([None] * len(df)),
-            'fx_type': pd.Series([None] * len(df)),                      # Not available in analyzed data
-            'fx_other_notional_currency': pd.Series([None] * len(df)),   # Not available in analyzed data
-            'competent_authority': df[competent_auth_col] if competent_auth_col else pd.Series([None] * len(df)),
-            'publication_date': pd.to_datetime(df[publication_date_col], errors='coerce') if publication_date_col else pd.Series([None] * len(df))
+            'isin': df['isin'] if 'isin' in df.columns else pd.Series([None] * len(df)),
+            'short_name': df['short_name'] if 'short_name' in df.columns else pd.Series([None] * len(df)),
+            'expiry_date': df['expiry_date'] if 'expiry_date' in df.columns else pd.Series([None] * len(df)),
+            'price_multiplier': df['price_multiplier'] if 'price_multiplier' in df.columns else pd.Series([None] * len(df)),
+            'underlying_isin': df['underlying_isin'] if 'underlying_isin' in df.columns else pd.Series([None] * len(df)),
+            'underlying_index_isin': df['underlying_index_isin'] if 'underlying_index_isin' in df.columns else pd.Series([None] * len(df)),
+            'underlying_index_name': df['underlying_index_name'] if 'underlying_index_name' in df.columns else pd.Series([None] * len(df)),
+            'underlying_basket_isin': df['underlying_basket_isin'] if 'underlying_basket_isin' in df.columns else pd.Series([None] * len(df)),
+            'delivery_type': df['delivery_type'] if 'delivery_type' in df.columns else pd.Series([None] * len(df)),
+            'fx_type': df['fx_type'] if 'fx_type' in df.columns else pd.Series([None] * len(df)),
+            'fx_other_notional_currency': df['fx_other_notional_currency'] if 'fx_other_notional_currency' in df.columns else pd.Series([None] * len(df)),
+            'commodity_base_product': df['commodity_base_product'] if 'commodity_base_product' in df.columns else pd.Series([None] * len(df)),
+            'commodity_sub_product': df['commodity_sub_product'] if 'commodity_sub_product' in df.columns else pd.Series([None] * len(df)),
+            'commodity_additional_sub_product': df['commodity_additional_sub_product'] if 'commodity_additional_sub_product' in df.columns else pd.Series([None] * len(df)),
+            'competent_authority': pd.Series([None] * len(df)),
+            'publication_date': pd.Series([None] * len(df)),
+            'version_number': pd.Series([1] * len(df))
         })
         
         forward_df = forward_df.dropna(subset=['isin'])
         
         if len(forward_df) > 0:
+            self.con.register('forward_df', forward_df)
             self.con.execute("""
                 INSERT INTO forward_instruments 
                 SELECT * FROM forward_df
@@ -354,41 +310,36 @@ class BulkInserter:
             """)
     
     def insert_rights(self, df: pd.DataFrame):
-        """Bulk insert rights/entitlements (R) using actual FIRDS data structure."""
-        # Use actual column names from population analysis
-        isin_col = self._find_column(df, ['Id'])
-        short_name_col = self._find_column(df, ['RefData_FinInstrmGnlAttrbts_ShrtNm'])
-        expiry_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_XpryDt'])
-        multiplier_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_PricMltplr'])
-        delivery_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_DlvryTp'])
-        underlying_isin_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_UndrlygInstrm'])
-        competent_auth_col = self._find_column(df, ['RefData_TechAttrbts_RlvntCmptntAuthrty'])
-        publication_date_col = self._find_column(df, ['RefData_TechAttrbts_PblctnPrd_FrDt'])
-        
+        """Bulk insert rights/entitlements (H). Expects DataFrame with data model column names."""
         rights_df = pd.DataFrame({
-            'isin': df[isin_col] if isin_col else pd.Series([None] * len(df)),
-            'short_name': df[short_name_col] if short_name_col else pd.Series([None] * len(df)),
-            'expiry_date': pd.to_datetime(df[expiry_col], errors='coerce') if expiry_col else pd.Series([None] * len(df)),
-            'price_multiplier': pd.to_numeric(df[multiplier_col], errors='coerce') if multiplier_col else pd.Series([None] * len(df)),
-            'underlying_isin': df[underlying_isin_col] if underlying_isin_col else pd.Series([None] * len(df)),
-            'underlying_index_isin': pd.Series([None] * len(df)),        # Not available in analyzed data
-            'underlying_index_name': pd.Series([None] * len(df)),        # Not available in analyzed data
-            'underlying_index_term_unit': pd.Series([None] * len(df)),   # Not available in analyzed data
-            'underlying_index_term_value': pd.Series([None] * len(df)),  # Not available in analyzed data
-            'underlying_basket_isin': pd.Series([None] * len(df)),       # Not available in analyzed data
-            'option_type': pd.Series([None] * len(df)),                  # Not available in analyzed data
-            'option_exercise_style': pd.Series([None] * len(df)),        # Not available in analyzed data
-            'strike_price': pd.Series([None] * len(df)),                 # Not available in analyzed data
-            'delivery_type': df[delivery_col] if delivery_col else pd.Series([None] * len(df)),
-            'fx_type': pd.Series([None] * len(df)),                      # Not available in analyzed data
-            'fx_other_notional_currency': pd.Series([None] * len(df)),   # Not available in analyzed data
-            'competent_authority': df[competent_auth_col] if competent_auth_col else pd.Series([None] * len(df)),
-            'publication_date': pd.to_datetime(df[publication_date_col], errors='coerce') if publication_date_col else pd.Series([None] * len(df))
+            'isin': df['isin'] if 'isin' in df.columns else pd.Series([None] * len(df)),
+            'short_name': df['short_name'] if 'short_name' in df.columns else pd.Series([None] * len(df)),
+            'expiry_date': df['expiry_date'] if 'expiry_date' in df.columns else pd.Series([None] * len(df)),
+            'price_multiplier': df['price_multiplier'] if 'price_multiplier' in df.columns else pd.Series([None] * len(df)),
+            'underlying_isin': df['underlying_isin'] if 'underlying_isin' in df.columns else pd.Series([None] * len(df)),
+            'underlying_index_isin': df['underlying_index_isin'] if 'underlying_index_isin' in df.columns else pd.Series([None] * len(df)),
+            'underlying_index_name': df['underlying_index_name'] if 'underlying_index_name' in df.columns else pd.Series([None] * len(df)),
+            'underlying_index_term_unit': pd.Series([None] * len(df)),
+            'underlying_index_term_value': pd.Series([None] * len(df)),
+            'underlying_basket_isin': df['underlying_basket_isin'] if 'underlying_basket_isin' in df.columns else pd.Series([None] * len(df)),
+            'option_type': df['option_type'] if 'option_type' in df.columns else pd.Series([None] * len(df)),
+            'option_exercise_style': df['option_exercise_style'] if 'option_exercise_style' in df.columns else pd.Series([None] * len(df)),
+            'strike_price': df['strike_price'] if 'strike_price' in df.columns else pd.Series([None] * len(df)),
+            'delivery_type': df['delivery_type'] if 'delivery_type' in df.columns else pd.Series([None] * len(df)),
+            'commodity_base_product': df['commodity_base_product'] if 'commodity_base_product' in df.columns else pd.Series([None] * len(df)),
+            'commodity_sub_product': df['commodity_sub_product'] if 'commodity_sub_product' in df.columns else pd.Series([None] * len(df)),
+            'commodity_additional_sub_product': df['commodity_additional_sub_product'] if 'commodity_additional_sub_product' in df.columns else pd.Series([None] * len(df)),
+            'fx_type': df['fx_type'] if 'fx_type' in df.columns else pd.Series([None] * len(df)),
+            'fx_other_notional_currency': df['fx_other_notional_currency'] if 'fx_other_notional_currency' in df.columns else pd.Series([None] * len(df)),
+            'competent_authority': pd.Series([None] * len(df)),
+            'publication_date': pd.Series([None] * len(df)),
+            'version_number': pd.Series([1] * len(df))
         })
         
         rights_df = rights_df.dropna(subset=['isin'])
         
         if len(rights_df) > 0:
+            self.con.register('rights_df', rights_df)
             self.con.execute("""
                 INSERT INTO rights_instruments 
                 SELECT * FROM rights_df
@@ -413,25 +364,20 @@ class BulkInserter:
             """)
     
     def insert_civs(self, df: pd.DataFrame):
-        """Bulk insert collective investment vehicles (C) using actual FIRDS data structure."""
-        # Use actual column names from population analysis
-        isin_col = self._find_column(df, ['Id'])
-        short_name_col = self._find_column(df, ['RefData_FinInstrmGnlAttrbts_ShrtNm'])
-        underlying_isin_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_UndrlygInstrm'])
-        competent_auth_col = self._find_column(df, ['RefData_TechAttrbts_RlvntCmptntAuthrty'])
-        publication_date_col = self._find_column(df, ['RefData_TechAttrbts_PblctnPrd_FrDt'])
-        
+        """Bulk insert collective investment vehicles (C). Expects DataFrame with data model column names."""
         civ_df = pd.DataFrame({
-            'isin': df[isin_col] if isin_col else pd.Series([None] * len(df)),
-            'short_name': df[short_name_col] if short_name_col else pd.Series([None] * len(df)),
-            'underlying_isin': df[underlying_isin_col] if underlying_isin_col else pd.Series([None] * len(df)),
-            'competent_authority': df[competent_auth_col] if competent_auth_col else pd.Series([None] * len(df)),
-            'publication_date': pd.to_datetime(df[publication_date_col], errors='coerce') if publication_date_col else pd.Series([None] * len(df))
+            'isin': df['isin'] if 'isin' in df.columns else pd.Series([None] * len(df)),
+            'short_name': df['short_name'] if 'short_name' in df.columns else pd.Series([None] * len(df)),
+            'underlying_isin': df['underlying_isin'] if 'underlying_isin' in df.columns else pd.Series([None] * len(df)),
+            'competent_authority': pd.Series([None] * len(df)),
+            'publication_date': pd.Series([None] * len(df)),
+            'version_number': pd.Series([1] * len(df))
         })
         
         civ_df = civ_df.dropna(subset=['isin'])
         
         if len(civ_df) > 0:
+            self.con.register('civ_df', civ_df)
             self.con.execute("""
                 INSERT INTO civ_instruments 
                 SELECT * FROM civ_df
@@ -443,28 +389,24 @@ class BulkInserter:
             """)
     
     def insert_spots(self, df: pd.DataFrame):
-        """Bulk insert spot instruments (I) using actual FIRDS data structure."""
-        # Use actual column names from population analysis
-        isin_col = self._find_column(df, ['Id'])
-        short_name_col = self._find_column(df, ['RefData_FinInstrmGnlAttrbts_ShrtNm'])
-        competent_auth_col = self._find_column(df, ['RefData_TechAttrbts_RlvntCmptntAuthrty'])
-        publication_date_col = self._find_column(df, ['RefData_TechAttrbts_PblctnPrd_FrDt'])
-        
+        """Bulk insert spot instruments (I/R). Expects DataFrame with data model column names."""
         spot_df = pd.DataFrame({
-            'isin': df[isin_col] if isin_col else pd.Series([None] * len(df)),
-            'short_name': df[short_name_col] if short_name_col else pd.Series([None] * len(df)),
-            'commodity_base_product': pd.Series([None] * len(df)),        # Not available in analyzed data
-            'commodity_sub_product': pd.Series([None] * len(df)),         # Not available in analyzed data
-            'commodity_additional_sub_product': pd.Series([None] * len(df)), # Not available in analyzed data
-            'transaction_type': pd.Series([None] * len(df)),              # Not available in analyzed data
-            'final_price_type': pd.Series([None] * len(df)),              # Not available in analyzed data
-            'competent_authority': df[competent_auth_col] if competent_auth_col else pd.Series([None] * len(df)),
-            'publication_date': pd.to_datetime(df[publication_date_col], errors='coerce') if publication_date_col else pd.Series([None] * len(df))
+            'isin': df['isin'] if 'isin' in df.columns else pd.Series([None] * len(df)),
+            'short_name': df['short_name'] if 'short_name' in df.columns else pd.Series([None] * len(df)),
+            'commodity_base_product': df['commodity_base_product'] if 'commodity_base_product' in df.columns else pd.Series([None] * len(df)),
+            'commodity_sub_product': df['commodity_sub_product'] if 'commodity_sub_product' in df.columns else pd.Series([None] * len(df)),
+            'commodity_additional_sub_product': df['commodity_additional_sub_product'] if 'commodity_additional_sub_product' in df.columns else pd.Series([None] * len(df)),
+            'transaction_type': pd.Series([None] * len(df)),
+            'final_price_type': pd.Series([None] * len(df)),
+            'competent_authority': pd.Series([None] * len(df)),
+            'publication_date': pd.Series([None] * len(df)),
+            'version_number': pd.Series([1] * len(df))
         })
         
         spot_df = spot_df.dropna(subset=['isin'])
         
         if len(spot_df) > 0:
+            self.con.register('spot_df', spot_df)
             self.con.execute("""
                 INSERT INTO spot_instruments 
                 SELECT * FROM spot_df

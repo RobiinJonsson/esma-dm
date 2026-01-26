@@ -194,28 +194,36 @@ class FIRDSParser:
         
         self.logger.info(f"Found {len(csv_files)} files matching pattern")
         
-        # If latest_only, filter to most recent file per asset type
+        # If latest_only, filter to most recent DATE per asset type (all files from that date)
         files_to_process = csv_files
         files_skipped = 0
         
         if latest_only:
-            # Group files by asset type
-            files_by_type = defaultdict(list)
+            # Group files by asset type and date
+            files_by_type_date = defaultdict(lambda: defaultdict(list))
             for f in csv_files:
-                # Extract asset type from filename (e.g., FULINS_E_20260103_...)
+                # Extract asset type and date from filename (e.g., FULINS_E_20260103_01of02_data.csv)
                 parts = f.name.split('_')
                 if len(parts) >= 3:
                     atype = parts[1]  # Second part is asset type
-                    files_by_type[atype].append(f)
+                    date = parts[2]   # Third part is date
+                    files_by_type_date[atype][date].append(f)
             
-            # Keep only the latest file per asset type (by filename, which includes date)
+            # Keep all files from the latest date per asset type
             files_to_process = []
-            for atype, files in files_by_type.items():
-                latest = max(files, key=lambda f: f.name)  # Latest by filename sort
-                files_to_process.append(latest)
-                files_skipped += len(files) - 1
-                if len(files) > 1:
-                    self.logger.info(f"Asset type {atype}: using latest file {latest.name} (skipped {len(files)-1} older files)")
+            for atype, dates_dict in files_by_type_date.items():
+                # Get the latest date for this asset type
+                latest_date = max(dates_dict.keys())
+                latest_files = dates_dict[latest_date]
+                files_to_process.extend(latest_files)
+                
+                # Count skipped files from older dates
+                total_files = sum(len(files) for files in dates_dict.values())
+                skipped = total_files - len(latest_files)
+                files_skipped += skipped
+                
+                if len(dates_dict) > 1:
+                    self.logger.info(f"Asset type {atype}: using {len(latest_files)} files from {latest_date} (skipped {skipped} files from older dates)")
             
             files_to_process = sorted(files_to_process)
             self.logger.info(f"After latest_only filter: {len(files_to_process)} files to process, {files_skipped} skipped")

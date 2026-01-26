@@ -13,7 +13,7 @@ import pandas as pd
 import requests
 
 from ..utils import Utils
-from ..config import default_config
+from ..config import default_config, get_fitrs_config
 from ..storage.fitrs import FITRSStorage
 from ..models.transparency_enums import (
     Methodology, InstrumentClassification, FileType as FITRSFileType,
@@ -42,7 +42,10 @@ class FITRSClient:
         >>> from esma_dm import FITRSClient
         >>> 
         >>> # Initialize client
-        >>> fitrs = FITRSClient(date_from='2024-01-01')
+        >>> fitrs = FITRSClient()  # Uses config defaults
+        >>> 
+        >>> # Or with custom parameters
+        >>> fitrs = FITRSClient(date_from='2024-01-01', limit=5000)
         >>> 
         >>> # Get list of available files
         >>> files = fitrs.get_file_list()
@@ -61,9 +64,9 @@ class FITRSClient:
     
     def __init__(
         self,
-        date_from: str = "2017-01-01",
+        date_from: Optional[str] = None,
         date_to: Optional[str] = None,
-        limit: int = 10000,
+        limit: Optional[int] = None,
         config: Optional[Any] = None,
         db_path: Optional[str] = None
     ):
@@ -71,15 +74,18 @@ class FITRSClient:
         Initialize FITRS client.
         
         Args:
-            date_from: Start date for filtering files (YYYY-MM-DD format)
-            date_to: End date for filtering files (YYYY-MM-DD format, defaults to today)
-            limit: Maximum number of records to fetch per request
+            date_from: Start date for filtering files (defaults to 2017-01-01)
+            date_to: End date for filtering files (defaults to today)
+            limit: Maximum number of records to fetch per request (defaults to 10000)
             config: Optional custom configuration object
             db_path: Path to fitrs.db database file
         """
-        self.date_from = date_from
-        self.date_to = date_to or datetime.today().strftime("%Y-%m-%d")
-        self.limit = limit
+        self.config = config or default_config
+        self.fitrs_config = get_fitrs_config()
+        
+        # Use centralized defaults
+        self.date_from, self.date_to = self.fitrs_config.get_date_range(date_from, date_to)
+        self.limit = min(limit or self.fitrs_config.default_limit, self.fitrs_config.max_limit)
         self.config = config or default_config
         
         self.logger = Utils.set_logger("FITRSClient")

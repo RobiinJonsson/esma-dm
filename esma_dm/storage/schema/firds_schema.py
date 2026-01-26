@@ -120,19 +120,28 @@ def create_futures_table(con):
 
 
 def create_option_table(con):
-    """Create option instruments table (I) based on actual FIRDS data structure.
-    
-    Note: FIRDS asset type I contains environmental derivatives, not traditional options.
-    """
+    """Create option instruments table (O) using FIRDS data mapping specification."""
     con.execute("""
         CREATE TABLE IF NOT EXISTS option_instruments (
             isin VARCHAR PRIMARY KEY,
-            asset_class_base_product VARCHAR,    -- RefData_DerivInstrmAttrbts_AsstClssSpcfc (base)
-            asset_class_sub_product VARCHAR,     -- RefData_DerivInstrmAttrbts_AsstClssSpcfc (sub)
-            asset_class_further_sub VARCHAR,     -- RefData_DerivInstrmAttrbts_AsstClssSpcfc (further)
-            asset_class_transaction_type VARCHAR, -- RefData_DerivInstrmAttrbts_AsstClssSpcfc (transaction)
-            version_number INTEGER DEFAULT 1,
-            FOREIGN KEY (isin) REFERENCES instruments(isin)
+            short_name VARCHAR,                           -- RefData_FinInstrmGnlAttrbts_ShrtNm
+            expiry_date DATE,                            -- RefData_DerivInstrmAttrbts_XpryDt
+            price_multiplier DECIMAL,                    -- RefData_DerivInstrmAttrbts_PricMltplr
+            underlying_isin VARCHAR,                     -- RefData_DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN
+            underlying_index_isin VARCHAR,               -- RefData_DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_ISIN
+            underlying_index_name VARCHAR,               -- RefData_DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm
+            option_type VARCHAR,                         -- RefData_DerivInstrmAttrbts_OptnTp
+            option_exercise_style VARCHAR,               -- RefData_DerivInstrmAttrbts_OptnExrcStyle
+            strike_price DECIMAL,                        -- RefData_DerivInstrmAttrbts_StrkPric_Pric_MntryVal_Amt
+            strike_price_percentage DECIMAL,             -- RefData_DerivInstrmAttrbts_StrkPric_Pric_Pctg
+            strike_price_basis_points DECIMAL,           -- RefData_DerivInstrmAttrbts_StrkPric_Pric_BsisPts
+            strike_price_currency VARCHAR,               -- Not available in current data
+            delivery_type VARCHAR,                       -- RefData_DerivInstrmAttrbts_DlvryTp
+            fx_type VARCHAR,                            -- RefData_DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_FxTp
+            other_notional_currency VARCHAR,            -- RefData_DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_OthrNtnlCcy
+            competent_authority VARCHAR,                 -- RefData_TechAttrbts_RlvntCmptntAuthrty
+            publication_date DATE,                       -- RefData_TechAttrbts_PblctnPrd_FrDt
+            version_number INTEGER DEFAULT 1
         )
     """)
 

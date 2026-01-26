@@ -12,7 +12,7 @@ import requests
 from tqdm import tqdm
 
 from ..utils import Utils
-from ..config import default_config
+from esma_dm.config import default_config
 from ..utils.constants import SSR_SOLR_URL
 
 

@@ -18,7 +18,7 @@ from bs4 import BeautifulSoup
 from requests.models import Response
 from tqdm import tqdm
 
-from ..config import default_config
+from esma_dm.config import default_config
 
 
 class Utils:

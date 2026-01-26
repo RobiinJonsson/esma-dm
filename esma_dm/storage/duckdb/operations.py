@@ -119,6 +119,32 @@ class DuckDBOperations:
         delivery_type_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_DlvryTp'])
         expiry_date_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_XpryDt'])
         
+        # Option-specific fields
+        option_type_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_OptnTp'])
+        option_exercise_style_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_OptnExrcStyle'])
+        underlying_isin_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'])
+        underlying_index_isin_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_ISIN'])
+        underlying_index_name_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm'])
+        strike_price_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_StrkPric_Pric_MntryVal_Amt'])
+        strike_price_percentage_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_StrkPric_Pric_Pctg'])
+        strike_price_basis_points_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_StrkPric_Pric_BsisPts'])
+        
+        # Additional derivative fields for futures/forwards/rights
+        underlying_basket_isin_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN'])
+        fx_type_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_FxTp'])
+        fx_other_notional_currency_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_OthrNtnlCcy'])
+        commodity_base_product_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Elctrcty_BasePdct',
+                                                              'RefData_DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_NtrlGas_BasePdct',
+                                                              'RefData_DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_BasePdct',
+                                                              'RefData_DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_GrnOilSeed_BasePdct'])
+        commodity_sub_product_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Elctrcty_SubPdct',
+                                                            'RefData_DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_NtrlGas_SubPdct',
+                                                            'RefData_DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_SubPdct',
+                                                            'RefData_DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_GrnOilSeed_SubPdct'])
+        commodity_additional_sub_product_col = self._find_column(df, ['RefData_DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Elctrcty_AddtlSubPdct',
+                                                                       'RefData_DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_AddtlSubPdct',
+                                                                       'RefData_DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_GrnOilSeed_AddtlSubPdct'])
+        
         if not isin_col:
             raise ValueError("ISIN column not found")
         
@@ -149,6 +175,24 @@ class DuckDBOperations:
         master_df['delivery_type'] = df[delivery_type_col] if delivery_type_col else None
         master_df['expiry_date'] = df[expiry_date_col] if expiry_date_col else None
         
+        # Option-specific fields
+        master_df['option_type'] = df[option_type_col] if option_type_col else None
+        master_df['option_exercise_style'] = df[option_exercise_style_col] if option_exercise_style_col else None
+        master_df['underlying_isin'] = df[underlying_isin_col] if underlying_isin_col else None
+        master_df['underlying_index_isin'] = df[underlying_index_isin_col] if underlying_index_isin_col else None
+        master_df['underlying_index_name'] = df[underlying_index_name_col] if underlying_index_name_col else None
+        master_df['strike_price'] = pd.to_numeric(df[strike_price_col], errors='coerce') if strike_price_col else None
+        master_df['strike_price_percentage'] = pd.to_numeric(df[strike_price_percentage_col], errors='coerce') if strike_price_percentage_col else None
+        master_df['strike_price_basis_points'] = pd.to_numeric(df[strike_price_basis_points_col], errors='coerce') if strike_price_basis_points_col else None
+        
+        # Additional derivative fields for futures/forwards/rights
+        master_df['underlying_basket_isin'] = df[underlying_basket_isin_col] if underlying_basket_isin_col else None
+        master_df['fx_type'] = df[fx_type_col] if fx_type_col else None
+        master_df['fx_other_notional_currency'] = df[fx_other_notional_currency_col] if fx_other_notional_currency_col else None
+        master_df['commodity_base_product'] = df[commodity_base_product_col] if commodity_base_product_col else None
+        master_df['commodity_sub_product'] = df[commodity_sub_product_col] if commodity_sub_product_col else None
+        master_df['commodity_additional_sub_product'] = df[commodity_additional_sub_product_col] if commodity_additional_sub_product_col else None
+        
         # Add asset type based on CFI
         if cfi_col:
             master_df['asset_type'] = df[cfi_col].str[0] if cfi_col else None
@@ -157,7 +201,8 @@ class DuckDBOperations:
     
     def _insert_listings(self, df: pd.DataFrame, source_file: str):
         """Insert market listings if trading venue columns are present."""
-        print(f"[DEBUG] _insert_listings called with {len(df)} rows")
+        self.logger.debug(f"_insert_listings called for {source_file} with {len(df)} rows")
+        print(f"[DEBUG] _insert_listings: {len(df)} rows from {source_file}")
         print(f"[DEBUG] Available columns: {list(df.columns)[:10]}...")  # Show first 10 columns
         
         # Map listing columns using actual FIRDS CSV column names
@@ -173,6 +218,7 @@ class DuckDBOperations:
         
         if not all([isin_col, venue_col]):
             self.logger.debug(f"Missing required columns for listings - ISIN: {isin_col}, Venue: {venue_col}")
+            print(f"[DEBUG] Skipping listings - missing required columns")
             return
         
         # Map additional listing columns
@@ -197,35 +243,35 @@ class DuckDBOperations:
         # Remove rows with null required values
         listings_df = listings_df.dropna(subset=['isin', 'trading_venue_id'])
         
-        print(f"[DEBUG] Prepared {len(listings_df)} listings records")
-        print(f"[DEBUG] Sample listings data: {listings_df.head(2).to_dict('records') if len(listings_df) > 0 else 'No data'}")
+        print(f"[DEBUG] After dropna: {len(listings_df)} listings remaining")
         
         if len(listings_df) == 0:
             self.logger.debug("No valid listings data to insert")
+            print(f"[DEBUG] No valid listings data after dropna")
             return
         
         # Insert into listings table
         try:
-            print(f"[DEBUG] Attempting to insert {len(listings_df)} listings")
+            # Register DataFrame with DuckDB
+            self.con.register('listings_df', listings_df)
             
-            # Use DuckDB's native bulk insert instead of pandas to_sql
+            # Use DuckDB's native bulk insert (id column is auto-increment, skip it)
             insert_query = """
                 INSERT INTO listings 
                 (isin, trading_venue_id, first_trade_date, termination_date, 
                  admission_approval_date, request_for_admission_date, issuer_request,
                  source_file, indexed_at)
-                SELECT * FROM listings_temp
+                SELECT isin, trading_venue_id, first_trade_date, termination_date,
+                       admission_approval_date, request_for_admission_date, issuer_request,
+                       source_file, indexed_at
+                FROM listings_df
             """
             
-            # Create temporary view and insert
-            self.con.execute("CREATE OR REPLACE VIEW listings_temp AS SELECT * FROM listings_df")
             result = self.con.execute(insert_query)
-            
-            print(f"[DEBUG] Successfully inserted listings")
+            print(f"[DEBUG] INSERT executed, rows affected: {len(listings_df)}")
             self.logger.info(f"Inserted {len(listings_df)} market listings")
             
         except Exception as e:
-            print(f"[DEBUG] Listings INSERT failed with error: {e}")
             self.logger.error(f"Failed to insert listings: {e}")
             raise
     
@@ -302,21 +348,24 @@ class DuckDBOperations:
                         inserter.insert_swaps(asset_df)
                     elif asset_type == 'F':
                         inserter.insert_futures(asset_df)
-                    elif asset_type == 'I':
+                    elif asset_type == 'O':  # Options
                         inserter.insert_options(asset_df)
                     elif asset_type == 'J':
                         inserter.insert_forwards(asset_df)
-                    elif asset_type == 'H':
+                    elif asset_type == 'R':  # Rights/Entitlements
                         inserter.insert_rights(asset_df)
                     elif asset_type == 'C':
                         inserter.insert_civs(asset_df)
-                    elif asset_type == 'R':
+                    elif asset_type == 'I':  # Spot Commodities
                         inserter.insert_spots(asset_df)
+                    elif asset_type == 'H':  # Non-standard/Others
+                        self.logger.warning(f"Non-standard asset type H found, skipping {len(asset_df)} instruments")
+                        continue
                     else:
                         self.logger.warning(f"Unknown asset type: {asset_type}, skipping")
                         continue
                     
-                    inserted_count = len(asset_df)  # Assume all rows were processed
+                    inserted_count = len(asset_df)
                     total_inserted += inserted_count
                     self.logger.debug(f"Processed {inserted_count} {asset_type} instruments")
                 

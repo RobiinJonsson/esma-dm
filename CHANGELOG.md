@@ -7,12 +7,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.3.0] - 2026-01-25
 
 ### Added
+- **Centralized Configuration Management**:
+  - Created specialized configuration classes (`FIRDSConfig`, `FITRSConfig`, `DatabaseConfig`)
+  - Added mode-specific configuration factory functions (`get_firds_config()`, etc.)
+  - Implemented smart defaults with validation (e.g., `validate_limit()`, `get_date_range()`)
+  - Mode-aware behavior: current mode optimized for performance, history mode for accuracy
+- **Component-Based Architecture**:
+  - Transformed FIRDSClient from "God Object" pattern to clean component composition
+  - Added component access properties: `firds.download`, `firds.parse`, `firds.store`, `firds.delta`
+  - Reduced API surface from 20+ methods to 6 high-level orchestration methods
+  - Self-documenting API through logical component grouping
+  - Clear separation of concerns: download vs parse vs storage vs delta processing
+- **High-Level Orchestration Methods**:
+  - `initialize_database()`: Database schema initialization
+  - `build_reference_database()`: Complete download + index workflow
+  - `get_reference_data()`: Quick ISIN lookup
+  - `query_database()`: Custom SQL execution
+  - `get_database_stats()`: Comprehensive statistics
+  - `process_deltas()`: History mode incremental updates
 - **Short name field support** for all instrument types:
   - Added `short_name` column to instruments database schema
   - Enhanced field extraction to include `RefData_FinInstrmGnlAttrbts_ShrtNm` (100% populated)
   - Updated bulk inserters to include short_name in database operations
   - Extended reference API to return short_name in instrument lookups
   - Provides concise, readable instrument identifiers (e.g., "NA/Swap OIS EUR 20290806")
+
+### Changed
+- **API Design Philosophy**:
+  - **Before**: Many delegated methods on main client class (firds.get_latest_full_files())
+  - **After**: Component-specific operations (firds.download.get_latest_full_files())
+  - Maintains backward compatibility for critical methods like `index_cached_files()`
+  - Component boundaries align with actual responsibilities and use cases
+- **Project Structure Reorganization**:
+  - Removed unused directories (`esma_dm/data/`, `esma_dm/downloads/`)
+  - Consolidated to single data location (`downloads/data/`) with organized subdirectories
+  - Added cache directory for temporary operations (`downloads/data/cache/`)
+  - Database location remains in `storage/duckdb/database/` as designed
+- **Import Path Simplification**:
+  - Eliminated complex relative imports (`from ...utils.validators import`)
+  - Standardized to clean absolute imports (`from esma_dm.utils.validators import`)
+  - Removed all fragile three-dot import patterns across codebase
+  - Enhanced IDE navigation and import resolution
+- **Configuration System Overhaul**:
+  - Moved `config.py` to `config/` module with base configuration and specialized registries
+  - Eliminated hardcoded defaults scattered throughout codebase
+  - Replaced `date_from='2024-01-01'` and `limit=1000` with centralized configuration
+  - Updated all clients to use configuration classes for consistent behavior
 
 ### Fixed
 - **FIRDS data model alignment** with actual ESMA structure:
@@ -26,11 +66,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Corrected field mapping between CSV extraction and database schema
   - Enhanced error handling for data type conversions
   - Improved debug logging for troubleshooting data loading issues
+- **Import and dependency issues**:
+  - Resolved circular import problems in module initialization
+  - Fixed configuration access patterns across all components
+  - Eliminated import errors from complex relative path chains
 
-### Changed
-- **Version updated to 0.3.0** reflecting significant data model corrections
-- **Enhanced field extraction logic** to properly map FIRDS column names to model attributes
-- **Improved database schema consistency** across all asset types
+### Improved
+- **Code Maintainability**:
+  - 0 complex relative imports across all analyzed modules
+  - Consistent configuration patterns throughout codebase
+  - Self-documenting configuration with clear mode-specific behavior
+  - Better separation of concerns between components
+- **Developer Experience**:
+  - Cleaner project structure with logical organization
+  - Simplified imports that IDEs can properly resolve
+  - Centralized configuration eliminates hunting for hardcoded values
+  - Mode-specific optimizations for different use cases
 
 ## [Unreleased]
 

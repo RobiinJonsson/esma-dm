@@ -21,6 +21,8 @@ A comprehensive Python package for accessing ESMA (European Securities and Marke
 - **Modular Architecture**: Clean separation of concerns with utility modules and focused components
 - **ISO Standard Validation**: Built-in validators for ISIN, LEI, CFI, and MIC codes
 - **Transparency API**: Query liquidity and turnover metrics via edm.transparency()
+- **Centralized Configuration**: Mode-aware settings with smart defaults and validation
+- **Clean Imports**: Simplified import patterns for better IDE support and maintainability
 
 ## Architecture
 
@@ -31,11 +33,14 @@ The package follows a clean, modular architecture with clear separation of conce
 ```
 esma_dm/
 ├── clients/          # Data source clients
-│   ├── firds/        # Modular FIRDS client
+│   ├── firds/        # Modular FIRDS client (6 focused modules)
 │   ├── fitrs/        # FITRS transparency data
 │   └── ssr/          # Short selling regulation
+├── config/           # Configuration management
+│   ├── base.py       # Base configuration class
+│   └── registry.py   # Specialized configurations
 ├── storage/          # Database backends
-│   ├── duckdb/       # DuckDB implementation
+│   ├── duckdb/       # DuckDB implementation (5 focused modules)
 │   ├── schema/       # Table definitions
 │   └── bulk/         # Bulk loading operations
 ├── models/           # Data models and mappers
@@ -49,11 +54,13 @@ esma_dm/
 
 ### Benefits
 
-- **Maintainability**: Each module has a single responsibility
+- **Maintainability**: Each module has a single responsibility with clean imports
 - **Testability**: Components can be tested independently
 - **Extensibility**: Easy to add new data sources or storage backends
 - **Reusability**: Shared utilities eliminate code duplication
 - **Type Safety**: Full type hints and validation
+- **Configuration Management**: Centralized settings with mode-specific optimizations
+- **Developer Experience**: Clean project structure with simplified import patterns
 
 ## Installation
 
@@ -67,16 +74,19 @@ pip install -e .
 ```python
 import esma_dm as edm
 
-# 1. Initialize database (choose mode)
-firds = edm.FIRDSClient(mode='current')  # or mode='history'
+# 1. Initialize with default configuration
+firds = edm.FIRDSClient()  # Uses smart defaults from configuration
 firds.data_store.initialize()
 
-# 2. Download latest files (uses cached by default)
+# Or with custom parameters
+firds = edm.FIRDSClient(mode='current', date_from='2025-01-01', limit=500)
+
+# 2. Download latest files (uses intelligent caching)
 firds.get_latest_full_files(asset_type='E')  # Equities
 
 # 3. Load database from CSV files
 results = firds.index_cached_files()
-print(f"Indexed {results['total_instruments']:,} instruments")
+print(f'Indexed {results["total_instruments"]:,} instruments')
 
 # 4. Query reference data
 instrument = edm.reference('SE0000242455')
@@ -84,11 +94,32 @@ print(instrument['short_name'])  # SWEDBANK/SH A
 
 # 5. Asset type queries
 swap_types = edm.reference.swap.types()
-print(f"Unique swap CFI codes: {len(swap_types)}")
+print(f'Unique swap CFI codes: {len(swap_types)}')
 
 # 6. Statistics
-print(f"Total swaps: {edm.reference.swap.count():,}")
+print(f'Total swaps: {edm.reference.swap.count():,}')
 summary = edm.reference.summary()
+```
+
+## Configuration Management
+
+The package now uses centralized configuration with mode-specific optimizations:
+
+```python
+from esma_dm.config import get_firds_config, get_database_config
+
+# Get mode-specific configuration
+current_config = get_firds_config('current')
+print(f'Cache enabled: {current_config.cache_enabled}')  # True
+print(f'Default limit: {current_config.default_limit}')  # 100
+
+history_config = get_firds_config('history')
+print(f'Cache enabled: {history_config.cache_enabled}')  # False (always fresh)
+print(f'Batch size: {history_config.batch_size}')       # 5000 (smaller for accuracy)
+
+# Configuration validation
+safe_limit = current_config.validate_limit(999999)  # Returns 1000 (max allowed)
+date_range = current_config.get_date_range('2025-01-01')  # Returns validated range
 ```
 
 ## Operation Modes
@@ -98,6 +129,12 @@ summary = edm.reference.summary()
 Optimized for querying latest instrument data with minimal storage overhead:
 
 ```python
+# Automatically uses optimized settings
+firds = edm.FIRDSClient(mode='current')
+# - Caching enabled for fast iteration
+# - Larger batch sizes for performance
+# - Latest snapshots only (9 core columns)
+```
 firds = edm.FIRDSClient(mode='current')  # Uses firds_current.duckdb
 firds.data_store.initialize()
 

@@ -1,12 +1,12 @@
 """
-Configuration management for ESMA Data Manager
+Configuration management for ESMA Data Manager - Base configuration class.
 """
 import os
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
 
-# Import constants
+# Import constants  
 from esma_dm.utils.constants import (
     FIRDS_SOLR_URL,
     FITRS_SOLR_URL,
@@ -20,9 +20,18 @@ from esma_dm.utils.constants import (
 
 def _get_downloads_dir() -> Path:
     """Get the downloads directory for cached CSV files."""
-    # Use downloads/data directory in the current working directory
-    cwd = Path.cwd()
-    downloads_dir = cwd / "downloads" / "data"
+    # Find the project root (where setup.py is located)
+    current_dir = Path(__file__).parent
+    project_root = current_dir
+    
+    # Go up until we find setup.py or reach the root
+    while project_root.parent != project_root:
+        if (project_root / "setup.py").exists():
+            break
+        project_root = project_root.parent
+    
+    # Use downloads/data directory in the project root
+    downloads_dir = project_root / "downloads" / "data"
     downloads_dir.mkdir(parents=True, exist_ok=True)
     return downloads_dir
 

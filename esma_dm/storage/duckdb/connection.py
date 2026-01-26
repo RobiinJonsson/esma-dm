@@ -10,6 +10,7 @@ import duckdb
 
 from ..base import StorageBackend
 from ..schema import initialize_schema
+from esma_dm.config import get_database_config
 from esma_dm import config as global_config
 
 
@@ -21,6 +22,7 @@ class DuckDBConnection:
         self.logger = logging.getLogger(__name__)
         self.mode = mode
         self.db_path = db_path
+        self.db_config = get_database_config(mode)
         
         self.con = None
     
