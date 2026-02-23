@@ -4,3 +4,5 @@ beautifulsoup4>=4.9.0
 lxml>=4.6.0
 tqdm>=4.60.0
 duckdb>=0.9.0
+click>=8.0.0
+rich>=13.0.0

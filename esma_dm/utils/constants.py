@@ -27,8 +27,16 @@ SSR_SOLR_URL = f"{ESMA_BASE_URL}/solr/esma_registers_mifid_shsexs/select"
 SSR_SOLR_ENDPOINT = "solr/esma_registers_mifid_shsexs/select"
 
 # Benchmarks URLs
-BENCHMARKS_SOLR_URL = f"{ESMA_BASE_URL}/solr/esma_registers_bmrauth/select"
-BENCHMARKS_SOLR_ENDPOINT = "solr/esma_registers_bmrauth/select"
+BENCHMARKS_SOLR_URL = f"{ESMA_BASE_URL}/solr/esma_registers_bench_files/select"
+BENCHMARKS_SOLR_ENDPOINT = "solr/esma_registers_bench_files/select"
+
+# Benchmark Entities URLs (administrators and benchmarks)
+BENCHMARKS_ENTITIES_SOLR_URL = f"{ESMA_BASE_URL}/solr/esma_registers_bench_entities/select"
+BENCHMARKS_ENTITIES_SOLR_ENDPOINT = "solr/esma_registers_bench_entities/select"
+
+# Benchmark Benchmarks URLs (third-country benchmarks)
+BENCHMARKS_BENCHMARKS_SOLR_URL = f"{ESMA_BASE_URL}/solr/esma_registers_bench_benchmarks/select"
+BENCHMARKS_BENCHMARKS_SOLR_ENDPOINT = "solr/esma_registers_bench_benchmarks/select"
 
 # Default query parameters
 DEFAULT_SOLR_PARAMS = {

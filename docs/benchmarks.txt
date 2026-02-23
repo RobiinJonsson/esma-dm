@@ -1,0 +1,294 @@
+Hyperlink name: Request the list of administrators sorted by status(es) under BMR and for specific status (e.g. Recognition under Art. 32 OR Equivalence under Art. 30)
+https://registers.esma.europa.eu/solr/esma_registers_bench_entities/select?q=en_euEeaStatus:("Recognition under Art. 32" OR "Equivalence under Art. 30")&sort=en_euEeaStatus asc&rows=1000&wt=xml&indent=true
+curl "https://registers.esma.europa.eu/solr/esma_registers_bench_entities/select?q=en_euEeaStatus%3A(%22Recognition+under+Art.+32%22+OR+%22Equivalence+under+Art.+30%22)&sort=en_euEeaStatus+asc&rows=1000&wt=xml&indent=true"
+
+Hyperlink name: Request the identities of the administrators located in the Union authorised or registered pursuant to Article 34 and the competent authorities responsible for the supervision thereof ordered by administrator full name
+https://registers.esma.europa.eu/solr/esma_registers_bench_entities/select?q=(en_euEeaStatus:"Authorisation under Art. 34" OR "Registration under Art. 34")&sort=en_fullName asc&rows=1000&wt=xml&indent=true
+curl "https://registers.esma.europa.eu/solr/esma_registers_bench_entities/select?q=en_euEeaStatus%3A%22Authorisation+under+Art.+34%22+OR+%22Registration+under+Art.+34%22&sort=en_fullName+asc&rows=1000&wt=xml&indent=true"
+
+Hyperlink name: Request the list of third country benchmarks including the identity of their administrator, and endorsing entity when applicable, which are compliant with the benchmarks regulation.
+https://registers.esma.europa.eu/solr/esma_registers_bench_benchmarks/select?q=*:*&rows=1000&wt=xml&indent=true
+curl "https://registers.esma.europa.eu/solr/esma_registers_bench_benchmarks/select?q=*%3A*&rows=1000&wt=xml&indent=true"
+
+Hyperlink name: Request the identities of third country administrators under Art. 30 including the list of their benchmarks and the third country competent authorities responsible for the supervision thereof ordered by location country
+https://registers.esma.europa.eu/solr/esma_registers_bench_entities/select?q={!join from=id to=_root_}en_euEeaStatus :"Equivalence under Art. 30"&sort=en_country asc&rows=1000&wt=xml&indent=true
+curl https://registers.esma.europa.eu/solr/esma_registers_bench_entities/select?q=%7B!join+from%3Did+to%3D_root_%7Den_euEeaStatus+%3A%22Equivalence+under+Art.+30%22&sort=en_country+asc&rows=1000&wt=xml&indent=true'
+
+Hyperlink name:Request the identities of the third country administrators that acquired recognition in accordance with Article 32 including the list of their benchmarks and, where applicable, the third country competent authorities responsible for the supervision thereof ordered by benchmark name
+https://registers.esma.europa.eu/solr/esma_registers_bench_entities/select?q={!join from=id to=_root_}en_euEeaStatus :"Recognition under Art. 32"&sort=bm_fullName asc&rows=1000&wt=xml&indent=true
+curl 'https://registers.esma.europa.eu/solr/esma_registers_bench_entities/select?q=%7B!join+from%3Did+to%3D_root_%7Den_euEeaStatus+%3A%22Recognition+under+Art.+32%22&sort=bm_fullName+asc&rows=1000&wt=xml&indent=true'
+
+Hyperlink name: Request the list of administrators sorted by location country/countries and for specific location countries (e.g. Germany OR Italy)
+https://registers.esma.europa.eu/solr/esma_registers_bench_entities/select?q=en_country:("GERMANY" OR "ITALY")&sort=en_country asc&rows=1000&wt=xml&indent=true
+curl "https://registers.esma.europa.eu/solr/esma_registers_bench_entities/select?q=en_country%3A(%22GERMANY%22+OR+%22ITALY%22)&sort=en_country+asc&rows=1000&wt=xml&indent=true"
+
+Hyperlink name: Request the list of administrators sorted by supervising authority/authorities (for specific supervising authorities) (e.g Autorité des Marchés Financiers (AMF) OR US Commodity Futures Trading Commission (CFTC))
+https://registers.esma.europa.eu/solr/esma_registers_bench_entities/select?q=en_supervisingAuthority:("Autorité des Marchés Financiers (AMF)" or "US Commodity Futures Trading Commission (CFTC)")&sort=en_supervisingAuthority asc&rows=1000&wt=xml&indent=true
+curl "https://registers.esma.europa.eu/solr/esma_registers_bench_entities/select?q=en_supervisingAuthority%3A(%22Autorit%C3%A9+des+March%C3%A9s+Financiers+(AMF)%22+or+%22US+Commodity+Futures+Trading+Commission+(CFTC)%22)&sort=en_supervisingAuthority+asc&rows=1000&wt=xml&indent=true"
+
+Hyperlink name: Request the list of third country benchmarks including the identity of their administrator, and endorsing entity when applicable, sorted by administrator full name (for all administrators)
+https://registers.esma.europa.eu/solr/esma_registers_bench_benchmarks/select?q=bm_fullName:*&sort=bm_en_fullName asc&rows=1000&wt=xml&indent=true
+curl "https://registers.esma.europa.eu/solr/esma_registers_bench_benchmarks/select?q=bm_fullName%3A*&sort=bm_fullName+asc&rows=1000&wt=xml&indent=true"
+
+Hyperlink name: Request the list of benchmarks that are endorsed in accordance with the procedure laid down in Article 33, the identities of their administrators, and the identities of the endorsing administrators or endorsing supervised entities ordered by benchmark name
+https://registers.esma.europa.eu/solr/esma_registers_bench_benchmarks/select?q=bm_euEeaStatus:"Endorsement under Art. 33"&sort=bm_fullName asc&rows=1000&wt=xml&indent=true
+curl "https://registers.esma.europa.eu/solr/esma_registers_bench_benchmarks/select?q=bm_euEeaStatus%3A%22Endorsement+under+Art.+33%22&sort=bm_fullName+asc&rows=1000&wt=xml&indent=true"
+
+
+For json format please change wt parameter to json (i.e &wt=json)
+
+8.Benchmark Reference Data System
+The fields available in the machine-to-machine queries are listed below.
+
+Please note that the files containing the full list of administrators/third country benchmarks are also available in the Benchmark register page:
+https://registers.esma.europa.eu/publication/searchRegister?core=esma_registers_bench_files.
+The description of the fields and the download process included in the https://registers.esma.europa.eu/publication/getBenchInstructionsPDF .
+
+
+BENCHMARKS ADMINISTRATORS
+
+Field Name	Field Type	Comment
+id	string	SOLR id record response
+en_esmaId	string	Administrator ESMA ID in the ESMA central database. Unique identifier of the Adminitrator.
+en_fullName	text_general	Administrator full name
+en_lei	text_general	Administrator Legal entity identifier (LEI)
+en_country	text_general	Administrator location country
+en_supervisingAuthority	text_general	Authority supervising the administrator in the third country
+en_contactInfo	text_general	Administrator official website URL or postal address (in case no website exists)
+en_euEeaRevelantAuthority	text_general	Authority relevant for the status of the administrator under BMR (Art. 30,32,33, 34)
+en_euEeaStatus	text_general	The status of the administrator under BMR (Art. 30,32,33, 34)
+en_referenceCountryName	text_general	Country relevant for the status of the administrator under BMR (Art. 30,32,33, 34)
+bm_esmaId	string	Benchmark ESMA ID in the ESMA central database. Unique identifier of the Benchmark.
+bm_fullName	text_general	Benchmark full name as reported by its administrator
+bm_isin	text_general	Benchmark ISIN code
+bm_indexCode	text_general	Benchmark Index code in case it exists under MiFIR reference data
+bm_euEeaStatus	text_general	Benchmark status under BMR (Art. 30,32,33)
+bm_administratorCountry	text_general	Benchmark administrator location country
+bm_relatedAdministratorFullName	text_general	Benchmark administrator full name
+bm_euEeaRelevantAuthority	text_general	Relevant authority relevant for the status under BMR (Art. 30,32,33)
+bm_endorsingEntityFullName	text_general	Full name of the entity endorsing the benchmark under Art.33
+bm_endorsingEntityLei	text_general	Legal Entity Identifier of the entity endorsing the benchmark under Art.33
+bm_endorsingEntityCountry	text_general	EU/EEA member State of the entity endorsing the benchmark under Art.33
+bm_endorsingEntityContact	text_general	Administrator official website URL or postal address (in case no website exists) of the endorsing entity under Art.33
+
+THIRD COUNTRY BENCHMARKS
+
+Field Name	Field Type	Comment
+id	string	SOLR id record response
+bm_esmaId	string	Benchmark ESMA ID in the ESMA central database. Unique identifier of the Benchmark.
+bm_fullName	text_general	Benchmark full name
+bm_isin	text_general	Benchmark ISIN code
+bm_indexCode	text_general	Benchmark Index code (in case it exists under MiFIR reference data)
+bm_euEeaStatus	text_general	Benchmark status under BMR (Art. 30,32,33)
+bm_administratorCountry	text_general	Benchmark administrator location country
+bm_relatedAdministratorFullName	text_general	Benchmark administrator full name
+bm_euEeaRelevantAuthority	text_general	Relevant authority for the status of the benchmark under BMR
+bm_endorsingEntityFullName	text_general	Full name of the entity endorsing the benchmark under Art.33
+bm_endorsingEntityLei	text_general	Legal Entity Identifier of the entity endorsing the benchmark under Art.33
+bm_endorsingEntityCountry	text_general	EU/EEA member State of the entity endorsing the benchmark under Art.33
+bm_endorsingEntityContact	text_general	Official website URL or postal address (in case no website exists) of the entity endorsing the benchmark under Art.33
+bm_referenceCountryName	text_general	Country relevant for the status of the administrator under BMR (Art. 30,32,33, 34)
+bm_en_esmaId	string	Benchmark administrator ESMA ID in the ESMA database
+bm_en_fullName	text_general	Benchmark administrator full name
+bm_en_lei	text_general	Benchmark administrator Legal entity identifier
+bm_en_country	text_general	Benchmark administrator location country
+bm_en_supervisingAuthority	text_general	Authority supervising the benchmark administrator in the third country
+bm_en_contactInfo	text_general	Official website URL or postal address (in case no website exists) of the benchmark administrator
+bm_en_euEeaRevelantAuthority	text_general	Relevant authority relevant for the status of the benchmark administrator under BMR (Art. 30,32,33)
+bm_en_euEeaStatus	text_general	The status of the benchmark administrator under BMR (Art. 30,32,33, 34)
+
+Predefined list of values per attribute.
+The queries specified in section 2 are indicative for Benchmarks Reference Data System. More refine queries can be constructed according to the specified format and naming convention (see page 5). In order to construct the queries, specific values can be assigned to every attribute. Some attributes can only be mapped with a value from a predefined list.
+
+For the Benchmarks Reference Data System, the aforementioned attributes and the predefined lists can be found below:
+
+
+A. Attributes: en_supervisingAuthority, en_euEeaRevelantAuthority, bm_euEeaRelevantAuthority, bm_en_supervisingAuthority, bm_en_euEeaRevelantAuthority
+
+Predefined list of values:
+Albanian Financial Supervisory Authority - ALAF
+Alberta Securities Commission - CAAS
+Australian Securities and Investments Commission (ASIC) - AUAS
+Austrian Financial Market Authority (FMA) - ATFM
+Authority for the Supervision and Development of Cooperative Societies - CYAS
+Autoridad de Supervisión del Sistema Financiero - BOAS
+Autorité de Contrôle Prudentiel et de Résolution (ACPR) - FRAC
+Autorité des marchés financiers - CAAM
+Autorité des Marchés Financiers (AMF) - FRAM
+Autorité Marocaine du Marché des Capitaux - MAAM
+Autoriti Monetari Brunei Darussalam - BNAM
+BANCA D'ITALIA (BDI) - ITBD
+Banco Central del Uruguay - UYBC
+Banco de Portugal (BP) - PTBP
+Bangladesh Securities and Exchange Commission - BDBS
+Bank of Greece (BOG) - GRBO
+Bank of Lithuania (LSC) - LTLS
+Bank of Spain (BDE) - ESBD
+Bermuda Monetary Authority - BMBM
+British Columbia Securities Commission - GBBC
+British Virgin Islands Financial Services Commission - GBBV
+Canadian Securities Transition Office (CSTO) - CACS
+Capital Market Authority - OMCM
+Capital Market Authority - SACM
+Capital Market Development Authority - MVSM
+Capital Markets and Securities Authority - TZCM
+Capital Markets Authority - KECM
+Capital Markets Authority - KWCM
+Capital Markets Authority - UGCM
+Capital Markets Board - TRCM
+Cayman Islands Monetary Authority - KYCI
+Center for Coordination and Development of Securities Market - UZCC
+Central Bank of Armenia - AMCB
+Central Bank of Bahrain - BHCB
+Central Bank of Cyprus (CBC) - CYCB
+Central Bank of Iceland
+Central Bank of Ireland (CBI) - IECB
+China Securities Regulatory Commission - CNCS
+Comisión Nacional Bancaria y de Valores - MXCN
+Comisión Nacional de Valores - ARCN
+Comisión Nacional del Mercado de Valores (CNMV) - ESCN
+Comissão de Valores Mobiliários - BRCV
+Comissão do Mercado de Capitais - AOCM
+Comissão do Mercado de Valores Mobiliários (CMVM) - PTCM
+Commission de Surveillance du Marché Financier de l'Afrique Centrale (Securities and Exchange Commission of Central Africa) - CFCS
+Commission de Surveillance du Secteur Financier (CSSF) - LUCS
+Commission d'Organisation et de Surveillance des Opérations de Bourse - DZCO
+Commissione Nazionale per le Societa e la Borsa (CONSOB) - ITCO
+Conseil du marché financier - TNCM
+Conseil régional de l'épargne publique et des marchés financiers - WACR
+Croatian Financial Services Supervisory Agency (HANFA) - HRHA
+Cyprus Securities and Exchange Commission (CySEC) - CYCY
+Czech National Bank (CNB) - CZCN
+Egyptian Financial Supervisory Authority* - EGEF
+Estonian Financial Supervision Authority (EFSA) - EEEF
+European Securities and Markets Authority - ESMA
+Federal Financial Supervisory Authority (BaFin) - DEBA
+Financial & Capital Market Commission (FKTK) - LVFK
+Financial Conduct Authority (FCA) - GBFC
+Financial Market Authority (FMA) - LIFM
+Financial Markets Authority - NZFM
+Financial Regulatory Commission - MNFR
+Financial Services Agency - JPFS
+Financial Services and Markets Authority (FSMA) - BEFS
+Financial Services Authority (FSA) - GBFA
+Financial Services Board - ZAFS
+Financial Services Commission - BBFS
+Financial Services Commission - JMFS
+Financial Services Commission - MRFS
+Financial Services Commission/Financial Supervisory Service - KRFS
+Financial Supervision Commission (FSC) - BGFS
+Financial Supervisory Commission - CNFS
+Finansinspektionen (FI) - SEFI
+Finanssivalvonta (FSA) - FIFS
+Finanstilsynet - DKFI
+Gibraltar FSC (FSC) - GIFS
+Guernsey Financial Services Commission - GGGF
+Hellenic Capital Market Commission (HCMC) - GRHC
+Hungarian Financial Supervisory Authority (PSZAF) - HUPS
+Indonesia Financial Services Authority - IDIF
+Institut Nacional Andorra de Finances - ADIN
+Isle of Man Financial Services Authority - IMIM
+Israel Securities Authority - ILIS
+Jersey Financial Services Commission - JEJF
+Jordan Securities Commission - JOJS
+Magyar Nemzeti Bank (The Central Bank of Hungary) - HUMN
+Malta Financial Services Authority (MFSA) - MTMF
+Ministry of Agriculture, Forestry and Fisheries - JPMA
+Ministry of Economy, Trade and Industry - JPME
+Monetary Authority of Singapore - SGMA
+National Bank of Belgium - BENB
+National Bank of Kazakhstan - KZNB
+National Bank of Slovakia (NBS) - SKNB
+National Securities and Stock Market Commission - UANS
+Nederlandse Bank (DNB) - NLDN
+Netherlands Authority for the Financial Markets (AFM) - NLAF
+Non Applicable - NOAP
+Norwegian Financial Supervisory Authority (Finanstilsynet) - NOFI
+Ontario Securities Commission - USOS
+Palestine Capital Market Authority - PSPC
+Polish Financial Supervision Authority - PLPF
+Polish Financial Supervisory Commission (KNF) - PLKN
+Prudential Regulation Authority (PRA) - GBPR
+Qatar Financial Markets Authority - QAQF
+Reserve Bank of Malawi - MWRB
+Romanian Financial Supervisory Authority (ASF) - ROAS
+Securities and Commodities Authority - AESC
+Securities and Exchange Board of India - INSE
+Securities and Exchange Commission - GHSE
+Securities and Exchange Commission - NGSE
+Securities and Exchange Commission - PHSE
+Securities and Exchange Commission - PKSE
+Securities and Exchange Commission - THSE
+Securities and Exchange Commission - USSE
+Securities and Exchange Commission - ZMSE
+Securities and Exchange Commission of Montenegro - MESE
+Securities and Exchange Commission of Sri Lanka - LKSE
+Securities and Exchange Commission of the Republic of Macedonia - MKSE
+Securities and Futures Commission - HKSF
+Securities Commission - MYSC
+Securities Commission - PGSC
+Securities Commission - RSSC
+Securities Commission of The Bahamas - BSSC
+Securities Commission of the Federation of Bosnia and Herzegovina - BASC
+Securities Market Agency (ATVP) - SIAT
+State Securities Commission - VNSS
+State Service for Financial Market Regulation and Supervision under the Government of the Kyrgyz Republic - KGSS
+Superintendencia de Compañías, Valores y Seguros - ECSC
+Superintendencia de Valores de la República Dominicana - DOSV
+Superintendencia de Valores y Seguros - CLSV
+Superintendencia del Mercado de Valores - PASM
+Superintendencia del Mercado de Valores - PESM
+Superintendencia del Sistema Financiero - SVSS
+Superintendencia Financiera de Colombia - COSF
+Superintendencia General de Valores - CRSG
+Superintendencia Nacional de Valores - VESN
+Swiss Financial Market Supervisory Authority - CHFI
+Syrian Commission on Financial Markets and Securities - SYSC
+The Bank of Russia - RUBR
+Trinidad and Tobago Securities and Exchange Commission - TTTT
+Turks & Caicos Islands Financial Services Commission - TCTC
+US Commodity Futures Trading Commission (CFTC) - USCF
+
+B. Attributes: en_euEeaStatus, bm_euEeaStatus, bm_en_euEeaStatus
+
+Predefined list of values:
+Equivalence under Art. 30
+Recognition under Art. 32
+Authorisation under Art. 34
+Registration under Art. 34
+Endorsement under Art. 33
+
+C. Attributes: en_country, en_referenceCountryName, bm_administratorCountry, bm_endorsingEntityCountry, bm_en_country
+
+Predefined list of values:
+The ISO 3166 English short names should be used (https://www.iso.org/obp/ui/#search).
+
+D. Attribute: bm_indexCode
+
+Predefined list of values:
+EONA
+EONS
+EURI
+EUUS
+EUCH
+GCFR
+ISDA
+LIBI
+LIBO
+MAAA
+PFAN
+TIBO
+STBO
+BBSW
+JIBA
+BUBO
+CDOR
+CIBO
+MOSP
+NIBO
+PRBO
+TLBO
+WIBO
+TREA
+SWAP
+FUSW

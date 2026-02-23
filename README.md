@@ -101,6 +101,129 @@ print(f'Total swaps: {edm.reference.swap.count():,}')
 summary = edm.reference.summary()
 ```
 
+## Command Line Interface
+
+The package provides a comprehensive CLI for managing ESMA data files, databases, and analysis tasks. All commands use rich terminal formatting for improved readability.
+
+### Installation
+
+After installing the package, the CLI is available via:
+
+```bash
+# Direct command
+esma-dm --help
+
+# Or via Python module
+python -m esma_dm --help
+```
+
+### File Management Commands
+
+#### List Available Files
+
+List files from ESMA FIRDS register with optional filters:
+
+```bash
+# List all available files
+esma-dm firds list
+
+# Filter by file type (FULINS = full snapshots, DLTINS = delta updates)
+esma-dm firds list --type FULINS
+
+# Filter by asset type (E = Equity, D = Debt, S = Swap, etc.)
+esma-dm firds list --asset E
+
+# Combine filters
+esma-dm firds list --type FULINS --asset E --limit 50
+
+# Date range filtering
+esma-dm firds list --date-from 2026-01-01 --date-to 2026-01-31
+```
+
+#### Download Files
+
+Download latest files from ESMA with caching support:
+
+```bash
+# Download latest equity FULINS files
+esma-dm firds download --type FULINS --asset E
+
+# Download latest delta files
+esma-dm firds download --type DLTINS --asset D
+
+# Force fresh download (ignore cache)
+esma-dm firds download --asset E --update
+
+# Download files for specific date
+esma-dm firds download --type DLTINS --asset E --date 2026-01-15
+```
+
+#### List Cached Files
+
+View files already downloaded to local cache:
+
+```bash
+# List all cached files
+esma-dm firds cache
+
+# Filter by asset type
+esma-dm firds cache --asset E
+
+# Filter by file type and asset
+esma-dm firds cache --type FULINS --asset D
+```
+
+The command displays file name, size, and modification date in a formatted table.
+
+#### Inspect File Structure
+
+List all field names (columns) in a CSV file:
+
+```bash
+# Using filename (searches cache directory)
+esma-dm firds fields FULINS_E_20260117_01of02_data.csv
+
+# Using absolute path
+esma-dm firds fields C:/path/to/file.csv
+```
+
+#### Preview File Contents
+
+Display the first N rows of a file:
+
+```bash
+# Show first 10 rows (default)
+esma-dm firds head FULINS_E_20260117_01of02_data.csv
+
+# Custom number of rows
+esma-dm firds head FULINS_E_20260117_01of02_data.csv --rows 20
+
+# Select specific columns
+esma-dm firds head FULINS_E_20260117_01of02_data.csv \
+  --columns "Id,RefData_FinInstrmGnlAttrbts_FullNm,RefData_FinInstrmGnlAttrbts_ClssfctnTp"
+
+# Short form
+esma-dm firds head FULINS_E_20260117_01of02_data.csv -n 5
+```
+
+### CLI Features
+
+- **Rich Formatting**: Beautiful tables with proper alignment and colors
+- **Progress Indicators**: Spinners and progress bars for long operations
+- **Smart Path Resolution**: Automatically finds files in cache directory
+- **Comprehensive Help**: Use `--help` with any command for detailed usage
+- **Error Handling**: Clear error messages with actionable suggestions
+
+### Package Information
+
+```bash
+# Show package version and info
+esma-dm info
+
+# Show version only
+esma-dm --version
+```
+
 ## Configuration Management
 
 The package now uses centralized configuration with mode-specific optimizations:

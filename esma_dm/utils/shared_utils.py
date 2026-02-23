@@ -260,21 +260,24 @@ class Utils:
             root = tree.getroot()
             
             # Detect format and parse accordingly
-            if root.find(".//Document:RefData", Utils.NAMESPACES) is not None:
+            # First check filename pattern for explicit FULINS/DLTINS identification
+            is_fulins = 'FULINS' in file_name.upper()
+            is_dltins = 'DLTINS' in file_name.upper()
+            
+            # Check for FIRDS FULINS format (look for RefData elements without namespace constraints)
+            refdata_elements = list(root.iter('RefData'))
+            if not refdata_elements:
+                # Try with namespace
+                refdata_elements = root.findall(".//Document:RefData", Utils.NAMESPACES)
+            
+            if refdata_elements or is_fulins:
                 # FIRDS FULINS format (full instrument files)
                 logger.info("Detected FIRDS FULINS format")
                 df = Utils._parse_firds_xml(root, logger, element_name="RefData")
-            elif list(root.iter()):
-                # Check for DLTINS format (delta files)
-                for elem in root.iter():
-                    if 'FinInstrmRptgRefDataDltaRpt' in elem.tag:
-                        logger.info("Detected FIRDS DLTINS format")
-                        df = Utils._parse_firds_xml(root, logger, element_name="FinInstrmRptgRefDataDltaRpt")
-                        break
-                else:
-                    # FITRS/DVCAP format
-                    logger.info("Detected FITRS/DVCAP format")
-                    df = Utils._parse_fitrs_xml(root, logger)
+            elif is_dltins or any('FinInstrmRptgRefDataDltaRpt' in elem.tag for elem in root.iter()):
+                # FIRDS DLTINS format (delta files)
+                logger.info("Detected FIRDS DLTINS format")
+                df = Utils._parse_firds_xml(root, logger, element_name="FinInstrmRptgRefDataDltaRpt")
             else:
                 # FITRS/DVCAP format
                 logger.info("Detected FITRS/DVCAP format")

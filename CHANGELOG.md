@@ -4,6 +4,153 @@ All notable changes to the esma-dm project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.3.2] - 2026-02-07
+
+### Added - Shared Resources & FITRS File Management
+- **Shared File Manager Components** (`esma_dm/file_manager/`):
+  - `enums.py`: Unified enums for all ESMA data sources:
+    - `FIRDSFileType`, `FITRSFileType` (file type enums)
+    - Shared `AssetType`, `InstrumentType` (classification enums)
+    - `CommodityBaseProduct`, `OptionType`, `ExerciseStyle`, `DeliveryType`, `BondSeniority`
+  - `models.py`: Generic file metadata models:
+    - `FileMetadata`: Base class for all file metadata
+    - `FIRDSFile`, `FITRSFile`: Specific implementations
+  - `downloader.py`: Shared HTTP download operations:
+    - Generic file downloading with progress tracking
+    - Cache management (list, clear, stats)
+    - ZIP file extraction support
+
+- **FITRS File Manager** (`esma_dm/file_manager/fitrs/`):
+  - `FITRSFileManager`: Complete FITRS file management:
+    - List transparency files with pagination
+    - Download latest full files (equity/non-equity)
+    - Parse FITRS CSV files
+    - Manage local cache with filtering
+    - Get statistics by file type and instrument type
+
+- **FITRS CLI Commands** (`esma-dm fitrs`) - **7 Commands** (consistent with FIRDS):
+  - `list`: List FITRS files with filtering (by type, instrument, date range)
+  - `download`: Download latest FITRS files by instrument type
+  - `cache`: List cached FITRS files with size and modification time
+  - `fields`: List all field names (columns) in a FITRS CSV file
+  - `head`: Display the first N rows of a FITRS CSV file
+  - `stats`: Show cache statistics by file type and instrument type
+  - `types`: Display all FITRS file types and descriptions
+
+- **FITRS File Type Support**:
+  - FULECR (Full Equity Comprehensive Report)
+  - DLTECR (Delta Equity Comprehensive Report)
+  - FULNCR (Full Non-Equity Comprehensive Report)
+  - DLTNCR (Delta Non-Equity Comprehensive Report)
+  - FULNCR_NYAR (Non-Equity Subclass Yearly)
+  - FULNCR_SISC (Non-Equity Subclass SI)
+
+### Changed
+- **CLI Command Restructuring**: Renamed `files` → `firds` for consistency
+  - `esma-dm files` → `esma-dm firds` (FIRDS reference data commands)
+  - Each data source now has its own specific command group
+  - Consistent pattern: `firds`, `fitrs`, `benchmarks` (future)
+  - Updated all documentation and examples
+
+- **FIRDS Refactoring** - Updated to use shared resources:
+  - `firds/enums.py` → `file_manager/enums.py` (now shared)
+  - `firds/models.py` → `file_manager/models.py` (now shared)
+  - Updated imports throughout FIRDS module to use shared components
+  - Maintained backward compatibility with `FileType` alias
+
+### Technical Improvements
+- DRY principle: Eliminated code duplication between data sources
+- Extensible architecture: Easy to add new data sources (SSR, Benchmarks)
+- **Consistent command structure**: Both FIRDS and FITRS now have identical 7 commands
+- Type safety: Full type hints and enum validation throughout
+- Unified CSV inspection tools (`fields`, `head`) work across all data sources
+
+## [0.3.1] - 2026-02-07
+
+### Added - Major Restructuring: File Manager Module
+- **Comprehensive File Manager Architecture** (`esma_dm/file_manager/`):
+  - Replaced `clients/` with unified `file_manager/` module for all file operations
+  - Created base `FileManager` class with common operations for all ESMA data sources
+  - Implemented complete `FIRDSFileManager` with integrated functionality:
+    - File listing with pagination (breaks 1000-record SOLR limit)
+    - File downloading with intelligent caching
+    - CSV parsing capabilities
+    - Metadata extraction from filenames
+    - Cache management and statistics
+  - Moved all FIRDS components into cohesive structure:
+    - `file_manager/firds/manager.py`: Main file manager orchestrator
+    - `file_manager/firds/downloader.py`: Download operations
+    - `file_manager/firds/parser.py`: CSV parsing logic
+    - `file_manager/firds/enums.py`: Type definitions (FileType, AssetType, etc.)
+    - `file_manager/firds/models.py`: Data models (FIRDSFile)
+    - `file_manager/firds/delta_processor.py`: Delta file processing
+
+- **Enhanced CLI Commands** (`esma-dm files`):
+  - `list`: List available files with pagination (fetches all 796+ equity files)
+  - `download`: Download latest files by asset type
+  - `cache`: List cached files with filtering and statistics
+  - `fields`: Display CSV column names
+  - `head`: Preview file contents with column selection
+  - `types`: **NEW** - List all file types and asset types with descriptions
+  - `stats`: **NEW** - Show cache statistics by type and asset
+
+- **File Management Features**:
+  - Automatic pagination to fetch unlimited results
+  - Date range filtering (date_from, date_to)
+  - File type filtering (FULINS/DLTINS/FULCAN)
+  - Asset type filtering (C, D, E, F, H, I, J, O, R, S)
+  - Metadata extraction (type, asset, date, part numbers)
+  - Cache statistics (counts by type/asset, size totals)
+  - Intelligent caching with update control
+
+- **Enums and Models Accessible via CLI**:
+  - FileType enum (FULINS, DLTINS, FULCAN)
+  - AssetType enum (all 10 CFI first characters)
+  - CommodityBaseProduct, OptionType, ExerciseStyle, DeliveryType, BondSeniority
+  - FIRDSFile model with complete metadata
+
+### Changed
+- **Architecture Reorganization**:
+  - **`clients/` → `file_manager/`**: All file operations now in dedicated module
+  - Separation of concerns clarified:
+    - `file_manager/`: File operations (list, download, parse, cache)
+    - `clients/`: Data source clients (orchestration + database integration)
+    - `storage/`: Database operations (DuckDB, SQL queries)
+    - `cli/`: User interface (commands and formatting)
+  - Imports updated: `from esma_dm.file_manager import FIRDSFileManager, FileType, AssetType`
+  
+- **CLI Improvements**:
+  - Added `--asset` as required parameter for download command
+  - Improved error messages with debug information
+  - Better progress indicators for long operations
+  - Statistics tables with rich formatting
+
+- **Dependency Updates**:
+  - Added `click>=8.0.0` for CLI framework
+  - Added `rich>=13.0.0` for terminal formatting
+
+- **Entry Points**:
+  - Simplified to single `esma-dm` command
+  - Accessible via `python -m esma_dm` or `esma-dm`
+
+### Fixed
+- SOLR query pagination to fetch more than 1000 results
+- File metadata extraction from FIRDS filenames
+- Date filtering properly applied to SOLR queries
+- Path validation for both relative and absolute paths
+- Rich table compatibility issues
+
+### Performance
+- Can fetch all 796+ equity files instead of 100-record limit
+- Automatic pagination handles large result sets efficiently  
+- Cache statistics computed on-demand
+
+### Developer Experience
+- Clear module boundaries and responsibilities
+- Easy to extend with new data sources (FITRS, SSR, Benchmarks)
+- All file operations accessible from CLI for testing
+- Type definitions and models exported from file_manager
+
 ## [0.3.0] - 2026-01-25
 
 ### Added

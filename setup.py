@@ -43,6 +43,8 @@ setup(
         "tqdm>=4.64.0",
         "duckdb>=0.9.0",
         "numpy>=1.21.0",
+        "click>=8.0.0",
+        "rich>=13.0.0",
     ],
     extras_require={
         "dev": [
@@ -61,9 +63,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "esma-dm-init=esma_dm.initialize:main",
-            "esma-dm=esma_dm.__main__:main",
-            "esma-dm-status=esma_dm.status:main",
+            "esma-dm=esma_dm.cli:cli",
         ],
     },
     keywords="esma finance mifid firds fitrs trading securities data duckdb iso-standards validators",

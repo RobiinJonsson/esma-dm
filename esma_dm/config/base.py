@@ -96,6 +96,7 @@ class Config:
         # Create subdirectories for different data types in downloads
         (self.downloads_path / "firds").mkdir(exist_ok=True)
         (self.downloads_path / "fitrs").mkdir(exist_ok=True)
+        (self.downloads_path / "dvcap").mkdir(exist_ok=True)
         (self.downloads_path / "benchmarks").mkdir(exist_ok=True)
         (self.downloads_path / "ssr").mkdir(exist_ok=True)
         (self.downloads_path / "cache").mkdir(exist_ok=True)
