@@ -4,7 +4,48 @@ All notable changes to the esma-dm project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.3.3] - 2026-03-07
+## [0.3.4] - 2026-03-07
+
+### Added - Complete FIRDS Instrument Model Layer (All 14 CFI Categories)
+
+Completed the model layer so every ISO 10962 CFI category has a dedicated Python
+dataclass. Previously only `EquityInstrument` (E*) and `DebtInstrument` (D*) had
+dedicated models; all other categories fell back to the generic `DerivativeInstrument`
+or base `Instrument`.
+
+New model files (one per CFI category):
+- `esma_dm/models/swap.py` — `SwapInstrument` (S*): IR, equity, FX, CDS, TRS
+- `esma_dm/models/futures.py` — `FutureInstrument` (F*): exchange-traded futures
+- `esma_dm/models/listed_option.py` — `ListedOptionInstrument` (O*): standardised options
+- `esma_dm/models/non_standard.py` — `NonStandardDerivativeInstrument` (H*): warrants, OTC options, swaptions
+- `esma_dm/models/forward.py` — `ForwardInstrument` (J*): FX forwards, FRAs, commodity forwards
+- `esma_dm/models/spot.py` — `SpotInstrument` (I*): ETCs, spot commodity/FX instruments
+- `esma_dm/models/strategy.py` — `StrategyInstrument` (K*): straddles, spreads, multi-leg strategies
+- `esma_dm/models/collective.py` — `CollectiveInvestmentInstrument` (C*): ETFs, UCITS, AIFs
+- `esma_dm/models/entitlement.py` — `EntitlementInstrument` (R*): subscription rights, mini-futures
+- `esma_dm/models/financing.py` — `FinancingInstrument` (L*): repos, securities lending
+- `esma_dm/models/referential.py` — `ReferentialInstrument` (T*): currencies, benchmarks used as underlyings
+- `esma_dm/models/other.py` — `OtherInstrument` (M*): unclassified and hybrid instruments
+
+Updated `InstrumentMapper.from_row()` to dispatch all 14 CFI category letters to
+their dedicated model class (previously F/H/I/J/S all mapped to `DerivativeInstrument`,
+C/O/R/K/L/M/T mapped to base `Instrument`).
+
+Updated subtype inheritance in `subtypes.py` to use the new category bases:
+- `EquitySwap` now extends `SwapInstrument` (was `DerivativeInstrument`)
+- `Swaption` and `EquityOption` now extend `NonStandardDerivativeInstrument`
+- `CommodityFuture` now extends `FutureInstrument`
+- `FXForward` now extends `ForwardInstrument`
+- `MiniFuture` now extends `EntitlementInstrument`
+
+CLI `schema firds --asset` expanded from 8 options to 19, covering all 14 categories:
+- `swap`, `future`, `listed-option`, `non-standard`, `forward`, `spot`, `strategy`
+- `collective`, `entitlement`, `financing`, `referential`, `other`
+- `derivative` and `option` retained for backwards compatibility
+
+`esma_dm/models/__init__.py` updated to export all 12 new model classes.
+
+
 
 ### Changed - CFI Package Refactoring (ISO 10962)
 - Refactored `esma_dm/models/utils/cfi.py` (monolithic, 1219 lines) into a proper Python package at `esma_dm/models/utils/cfi/`.

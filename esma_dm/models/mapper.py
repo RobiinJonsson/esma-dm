@@ -10,6 +10,18 @@ from .base import Instrument, TradingVenueAttributes, TechnicalAttributes, Recor
 from .debt import DebtInstrument
 from .equity import EquityInstrument
 from .derivative import DerivativeInstrument, OptionAttributes, FutureAttributes
+from .swap import SwapInstrument
+from .futures import FutureInstrument
+from .listed_option import ListedOptionInstrument
+from .non_standard import NonStandardDerivativeInstrument
+from .forward import ForwardInstrument
+from .spot import SpotInstrument
+from .strategy import StrategyInstrument
+from .collective import CollectiveInvestmentInstrument
+from .entitlement import EntitlementInstrument
+from .financing import FinancingInstrument
+from .referential import ReferentialInstrument
+from .other import OtherInstrument
 
 
 logger = logging.getLogger(__name__)
@@ -474,19 +486,56 @@ class InstrumentMapper:
                 # Debt instrument
                 debt_fields = cls._extract_debt_fields(row)
                 return DebtInstrument(**{**common, **debt_fields})
-            
+
             elif asset_type == 'E':
                 # Equity instrument
                 equity_fields = cls._extract_equity_fields(row)
                 return EquityInstrument(**{**common, **equity_fields})
-            
-            elif asset_type in ('F', 'I', 'J', 'S', 'H'):
-                # Derivative instrument
+
+            elif asset_type == 'C':
+                return CollectiveInvestmentInstrument(**common)
+
+            elif asset_type == 'F':
                 deriv_fields = cls._extract_derivative_fields(row)
-                return DerivativeInstrument(**{**common, **deriv_fields})
-            
+                return FutureInstrument(**{**common, **deriv_fields})
+
+            elif asset_type == 'H':
+                deriv_fields = cls._extract_derivative_fields(row)
+                return NonStandardDerivativeInstrument(**{**common, **deriv_fields})
+
+            elif asset_type == 'I':
+                deriv_fields = cls._extract_derivative_fields(row)
+                return SpotInstrument(**{**common, **deriv_fields})
+
+            elif asset_type == 'J':
+                deriv_fields = cls._extract_derivative_fields(row)
+                return ForwardInstrument(**{**common, **deriv_fields})
+
+            elif asset_type == 'K':
+                deriv_fields = cls._extract_derivative_fields(row)
+                return StrategyInstrument(**{**common, **deriv_fields})
+
+            elif asset_type == 'L':
+                return FinancingInstrument(**common)
+
+            elif asset_type == 'M':
+                return OtherInstrument(**common)
+
+            elif asset_type == 'O':
+                deriv_fields = cls._extract_derivative_fields(row)
+                return ListedOptionInstrument(**{**common, **deriv_fields})
+
+            elif asset_type == 'R':
+                return EntitlementInstrument(**common)
+
+            elif asset_type == 'S':
+                deriv_fields = cls._extract_derivative_fields(row)
+                return SwapInstrument(**{**common, **deriv_fields})
+
+            elif asset_type == 'T':
+                return ReferentialInstrument(**common)
+
             else:
-                # Other instrument types (C, O, R, etc.) - use base Instrument
                 return Instrument(**common)
         
         except Exception as e:

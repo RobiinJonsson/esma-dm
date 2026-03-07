@@ -74,7 +74,17 @@ def schema_cli():
 # ---------------------------------------------------------------------------
 
 FIRDS_ASSET_CHOICES = click.Choice(
-    ['base', 'trading-venue', 'technical', 'equity', 'debt', 'derivative', 'option', 'future'],
+    [
+        # Structural / nested
+        'base', 'trading-venue', 'technical',
+        # Primary categories — non-derivative
+        'equity', 'debt', 'collective', 'entitlement', 'financing', 'referential', 'other',
+        # Primary categories — derivative
+        'swap', 'future', 'listed-option', 'non-standard',
+        'forward', 'spot', 'strategy',
+        # Backwards-compatible aliases
+        'derivative', 'option',
+    ],
     case_sensitive=False,
 )
 
@@ -90,26 +100,97 @@ def firds_schema(asset: str | None):
 
     \b
     Available models:
-      base          Base Instrument (shared by all asset types)
-      trading-venue TradingVenueAttributes (nested in every instrument)
-      technical     TechnicalAttributes (nested in every instrument)
-      equity        EquityInstrument (CFI E*)
-      debt          DebtInstrument (CFI D*)
-      derivative    DerivativeInstrument (CFI F/H/I/J/S*)
-      option        OptionAttributes (nested in DerivativeInstrument)
-      future        FutureAttributes (nested in DerivativeInstrument)
+      base            Base Instrument (shared by all asset types)
+      trading-venue   TradingVenueAttributes (nested in every instrument)
+      technical       TechnicalAttributes (nested in every instrument)
+      equity          EquityInstrument            CFI E*
+      debt            DebtInstrument              CFI D*
+      swap            SwapInstrument              CFI S*
+      future          FutureInstrument            CFI F*
+      listed-option   ListedOptionInstrument      CFI O*
+      non-standard    NonStandardDerivativeInstrument  CFI H* (warrants, OTC options)
+      forward         ForwardInstrument           CFI J*
+      spot            SpotInstrument              CFI I* (ETCs, spot commodities)
+      strategy        StrategyInstrument          CFI K*
+      collective      CollectiveInvestmentInstrument  CFI C* (ETFs, funds)
+      entitlement     EntitlementInstrument       CFI R* (rights, mini-futures)
+      financing       FinancingInstrument         CFI L* (repos)
+      referential     ReferentialInstrument       CFI T*
+      other           OtherInstrument             CFI M*
+      derivative      DerivativeInstrument (generic derivative base)
+      option          OptionAttributes (nested in H*/O* instruments)
     """
     from esma_dm.models.base import Instrument, TradingVenueAttributes, TechnicalAttributes
     from esma_dm.models.equity import EquityInstrument
     from esma_dm.models.debt import DebtInstrument
     from esma_dm.models.derivative import DerivativeInstrument, OptionAttributes, FutureAttributes
+    from esma_dm.models.swap import SwapInstrument
+    from esma_dm.models.futures import FutureInstrument
+    from esma_dm.models.listed_option import ListedOptionInstrument
+    from esma_dm.models.non_standard import NonStandardDerivativeInstrument
+    from esma_dm.models.forward import ForwardInstrument
+    from esma_dm.models.spot import SpotInstrument
+    from esma_dm.models.strategy import StrategyInstrument
+    from esma_dm.models.collective import CollectiveInvestmentInstrument
+    from esma_dm.models.entitlement import EntitlementInstrument
+    from esma_dm.models.financing import FinancingInstrument
+    from esma_dm.models.referential import ReferentialInstrument
+    from esma_dm.models.other import OtherInstrument
 
     target = (asset or 'base').lower()
+
+    _model_map = {
+        'equity':        ('EquityInstrument (CFI E*)',
+                          'Shares, ETFs listed as equities, structured participation certificates',
+                          EquityInstrument),
+        'debt':          ('DebtInstrument (CFI D*)',
+                          'Bonds, notes, covered bonds, convertibles, money market instruments',
+                          DebtInstrument),
+        'swap':          ('SwapInstrument (CFI S*)',
+                          'Interest rate swaps, equity swaps, currency swaps, credit default swaps, total return swaps',
+                          SwapInstrument),
+        'future':        ('FutureInstrument (CFI F*)',
+                          'Exchange-traded futures on equities, rates, indices, currencies, commodities',
+                          FutureInstrument),
+        'listed-option': ('ListedOptionInstrument (CFI O*)',
+                          'Standardised exchange-traded options on equities, indices, rates, currencies',
+                          ListedOptionInstrument),
+        'non-standard':  ('NonStandardDerivativeInstrument (CFI H*)',
+                          'Covered warrants, turbo warrants, OTC options, swaptions',
+                          NonStandardDerivativeInstrument),
+        'forward':       ('ForwardInstrument (CFI J*)',
+                          'FX forwards, commodity forwards, forward rate agreements (FRAs)',
+                          ForwardInstrument),
+        'spot':          ('SpotInstrument (CFI I*)',
+                          'Exchange-traded commodities (ETCs), spot FX products',
+                          SpotInstrument),
+        'strategy':      ('StrategyInstrument (CFI K*)',
+                          'Multi-leg strategies: straddles, spreads, butterflies, condors',
+                          StrategyInstrument),
+        'collective':    ('CollectiveInvestmentInstrument (CFI C*)',
+                          'UCITS funds, alternative investment funds, ETFs, REITs, money market funds',
+                          CollectiveInvestmentInstrument),
+        'entitlement':   ('EntitlementInstrument (CFI R*)',
+                          'Subscription rights, allotment rights, mini-futures, leverage certificates',
+                          EntitlementInstrument),
+        'financing':     ('FinancingInstrument (CFI L*)',
+                          'Repurchase agreements (repos), securities lending, buy-sell-back',
+                          FinancingInstrument),
+        'referential':   ('ReferentialInstrument (CFI T*)',
+                          'Currencies, benchmarks, commodity indices used as derivative underlyings',
+                          ReferentialInstrument),
+        'other':         ('OtherInstrument (CFI M*)',
+                          'Unclassified or hybrid instruments not fitting any standard category',
+                          OtherInstrument),
+        'derivative':    ('DerivativeInstrument (generic base, CFI F/H/I/J/K/O/S*)',
+                          'Generic derivative base class — use a specific --asset for a focused view',
+                          DerivativeInstrument),
+    }
 
     if target == 'base':
         _render_schema(
             'FIRDS — Base Instrument',
-            'Common fields across all asset types (Instrument dataclass)',
+            'Common fields across all 14 asset categories (Instrument dataclass)',
             Instrument.get_schema(),
         )
     elif target == 'trading-venue':
@@ -124,39 +205,18 @@ def firds_schema(asset: str | None):
             'Nested in every Instrument as .technical',
             TechnicalAttributes.get_schema(),
         )
-    elif target == 'equity':
-        schema = {**Instrument.get_schema(), **EquityInstrument.get_schema()}
-        _render_schema(
-            'FIRDS — EquityInstrument (CFI E*)',
-            'Equities, ETFs, structured equity instruments',
-            schema,
-        )
-    elif target == 'debt':
-        schema = {**Instrument.get_schema(), **DebtInstrument.get_schema()}
-        _render_schema(
-            'FIRDS — DebtInstrument (CFI D*)',
-            'Bonds, notes, money market instruments',
-            schema,
-        )
-    elif target == 'derivative':
-        schema = {**Instrument.get_schema(), **DerivativeInstrument.get_schema()}
-        _render_schema(
-            'FIRDS — DerivativeInstrument (CFI F/H/I/J/S*)',
-            'Futures, options, swaps, forwards, non-standard derivatives',
-            schema,
-        )
     elif target == 'option':
         _render_schema(
             'FIRDS — OptionAttributes',
-            'Nested in DerivativeInstrument as .option_attrs  (CFI H*, O*)',
+            'Nested in H* and O* instruments as .option_attrs',
             OptionAttributes.get_schema(),
         )
-    elif target == 'future':
-        _render_schema(
-            'FIRDS — FutureAttributes',
-            'Nested in DerivativeInstrument as .future_attrs  (CFI F*)',
-            FutureAttributes.get_schema(),
-        )
+    elif target in _model_map:
+        title, subtitle, model_cls = _model_map[target]
+        _render_schema(f'FIRDS — {title}', subtitle, model_cls.get_schema())
+    else:
+        console.print(f'[red]Unknown asset: {asset!r}[/red]\n')
+        raise SystemExit(1)
 
     console.print('[dim]Bold field names are required.[/dim]\n')
 
@@ -431,14 +491,25 @@ def list_schemas():
     table.add_column('Description')
 
     rows = [
-        ('schema firds', '', 'Base Instrument fields (all asset types)'),
-        ('schema firds', '--asset equity', 'EquityInstrument fields (CFI E*)'),
-        ('schema firds', '--asset debt', 'DebtInstrument fields (CFI D*)'),
-        ('schema firds', '--asset derivative', 'DerivativeInstrument fields (CFI F/H/I/J/S*)'),
-        ('schema firds', '--asset option', 'OptionAttributes (nested in derivatives)'),
-        ('schema firds', '--asset future', 'FutureAttributes (nested in derivatives)'),
+        ('schema firds', '', 'Base Instrument fields (all 14 asset categories)'),
+        ('schema firds', '--asset equity', 'EquityInstrument — CFI E*'),
+        ('schema firds', '--asset debt', 'DebtInstrument — CFI D*'),
+        ('schema firds', '--asset swap', 'SwapInstrument — CFI S*'),
+        ('schema firds', '--asset future', 'FutureInstrument — CFI F*'),
+        ('schema firds', '--asset listed-option', 'ListedOptionInstrument — CFI O*'),
+        ('schema firds', '--asset non-standard', 'NonStandardDerivativeInstrument — CFI H* (warrants)'),
+        ('schema firds', '--asset forward', 'ForwardInstrument — CFI J*'),
+        ('schema firds', '--asset spot', 'SpotInstrument — CFI I* (ETCs)'),
+        ('schema firds', '--asset strategy', 'StrategyInstrument — CFI K*'),
+        ('schema firds', '--asset collective', 'CollectiveInvestmentInstrument — CFI C* (ETFs, funds)'),
+        ('schema firds', '--asset entitlement', 'EntitlementInstrument — CFI R* (rights)'),
+        ('schema firds', '--asset financing', 'FinancingInstrument — CFI L* (repos)'),
+        ('schema firds', '--asset referential', 'ReferentialInstrument — CFI T*'),
+        ('schema firds', '--asset other', 'OtherInstrument — CFI M*'),
         ('schema firds', '--asset trading-venue', 'TradingVenueAttributes (nested)'),
         ('schema firds', '--asset technical', 'TechnicalAttributes (nested)'),
+        ('schema firds', '--asset option', 'OptionAttributes (nested in H*/O*)'),
+        ('schema firds', '--asset derivative', 'DerivativeInstrument (generic base)'),
         ('schema transparency', '', 'All transparency schemas'),
         ('schema transparency', '--type equity', 'EquityTransparencyRecord (FULECR)'),
         ('schema transparency', '--type non-equity', 'NonEquityTransparencyRecord (FULNCR)'),

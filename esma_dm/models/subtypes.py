@@ -13,10 +13,15 @@ from .base import Instrument
 from .derivative import DerivativeInstrument
 from .equity import EquityInstrument
 from .debt import DebtInstrument
+from .swap import SwapInstrument
+from .futures import FutureInstrument
+from .non_standard import NonStandardDerivativeInstrument
+from .forward import ForwardInstrument
+from .entitlement import EntitlementInstrument
 
 
 @dataclass
-class EquitySwap(DerivativeInstrument):
+class EquitySwap(SwapInstrument):
     """
     Equity Swap (CFI: SE*) - 1.1M instruments.
     
@@ -58,7 +63,7 @@ class EquitySwap(DerivativeInstrument):
 
 
 @dataclass  
-class Swaption(DerivativeInstrument):
+class Swaption(NonStandardDerivativeInstrument):
     """
     Interest Rate Swaption (CFI: HR*) - 956K instruments.
     
@@ -118,7 +123,7 @@ class Swaption(DerivativeInstrument):
 
 
 @dataclass
-class EquityOption(DerivativeInstrument):
+class EquityOption(NonStandardDerivativeInstrument):
     """
     OTC Equity Option (CFI: HE*) - 560K instruments.
     
@@ -166,7 +171,7 @@ class EquityOption(DerivativeInstrument):
 
 
 @dataclass
-class MiniFuture(Instrument):
+class MiniFuture(EntitlementInstrument):
     """
     Mini-Future Certificate / Leverage Certificate (CFI: RF*) - 4.5M instruments.
     
@@ -348,7 +353,7 @@ class StructuredDebt(DebtInstrument):
 
 
 @dataclass
-class CommodityFuture(DerivativeInstrument):
+class CommodityFuture(FutureInstrument):
     """
     Commodity Future (CFI: FC*) - 29K instruments.
     
@@ -445,7 +450,7 @@ class CommodityFuture(DerivativeInstrument):
 
 
 @dataclass
-class FXForward(DerivativeInstrument):
+class FXForward(ForwardInstrument):
     """
     Foreign Exchange Forward (CFI: JF*) - 213K instruments.
     
