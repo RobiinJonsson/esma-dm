@@ -496,6 +496,154 @@ def list_types():
         raise click.Abort()
 
 
+@firds_cli.command(name='reference')
+@click.argument('isin')
+@click.option('--mode', default='current', type=click.Choice(['current', 'history'], case_sensitive=False),
+              help='Database mode (default: current)')
+def reference_lookup(isin: str, mode: str):
+    """
+    Look up an instrument by ISIN.
+
+    Displays master fields plus asset-specific detail columns.
+
+    Examples:
+
+        esma-dm firds reference SE0000242455
+
+        esma-dm firds reference US0378331005
+    """
+    try:
+        from esma_dm.clients.firds import FIRDSClient
+
+        firds = FIRDSClient(mode=mode)
+        instrument = firds.data_store.get_instrument(isin.upper())
+
+        if instrument is None:
+            console.print(f"\n[yellow]No instrument found for ISIN:[/yellow] {isin.upper()}\n")
+            return
+
+        console.print()
+
+        # Master fields
+        master_table = Table(title=f"Instrument  {isin.upper()}", box=box.ROUNDED, show_header=True)
+        master_table.add_column("Field", style="cyan", width=28)
+        master_table.add_column("Value", style="white")
+
+        skip_fields = {'asset_specific', 'cfi_classification'}
+        for key, value in instrument.items():
+            if key in skip_fields:
+                continue
+            master_table.add_row(key, str(value) if value is not None else "[dim]—[/dim]")
+
+        console.print(master_table)
+
+        # CFI classification
+        if instrument.get('cfi_classification'):
+            cfi = instrument['cfi_classification']
+            cfi_table = Table(title="CFI Classification", box=box.SIMPLE, show_header=True)
+            cfi_table.add_column("Dimension", style="magenta", width=18)
+            cfi_table.add_column("Value", style="white")
+            for k, v in cfi.items():
+                cfi_table.add_row(k, str(v) if v is not None else "[dim]—[/dim]")
+            console.print(cfi_table)
+
+        # Asset-specific detail
+        if instrument.get('asset_specific'):
+            detail = instrument['asset_specific']
+            detail_table = Table(title="Asset-Specific Fields", box=box.SIMPLE, show_header=True)
+            detail_table.add_column("Field", style="green", width=32)
+            detail_table.add_column("Value", style="white")
+            for k, v in detail.items():
+                if v is not None and str(v).strip() not in ('', 'None', 'nan'):
+                    detail_table.add_row(k, str(v))
+            console.print(detail_table)
+
+        console.print()
+
+    except Exception as e:
+        console.print(f"\n[bold red]Error:[/bold red] {str(e)}\n")
+        raise click.Abort()
+
+
+@firds_cli.command(name='search')
+@click.argument('query')
+@click.option('--asset', 'asset_type',
+              type=click.Choice(['C', 'D', 'E', 'F', 'H', 'I', 'J', 'O', 'R', 'S'], case_sensitive=False),
+              help='Filter by asset type')
+@click.option('--limit', default=20, show_default=True, help='Maximum number of results')
+@click.option('--mode', default='current', type=click.Choice(['current', 'history'], case_sensitive=False),
+              help='Database mode (default: current)')
+def search_instruments(query: str, asset_type: Optional[str], limit: int, mode: str):
+    """
+    Search instruments by name or ISIN prefix.
+
+    Matches against full_name (case-insensitive) and ISIN.
+
+    Examples:
+
+        esma-dm firds search "apple"
+
+        esma-dm firds search "volkswagen" --asset E --limit 10
+
+        esma-dm firds search "US0378"
+    """
+    try:
+        from esma_dm.clients.firds import FIRDSClient
+
+        firds = FIRDSClient(mode=mode)
+        con = firds.data_store.con
+
+        like_pattern = f"%{query.upper()}%"
+        params = [like_pattern, like_pattern]
+
+        asset_filter = ""
+        if asset_type:
+            asset_filter = "AND instrument_type = ?"
+            params.append(asset_type.upper())
+
+        params.append(limit)
+
+        sql = f"""
+            SELECT isin, instrument_type, cfi_code, full_name, currency
+            FROM instruments
+            WHERE (UPPER(isin) LIKE ? OR UPPER(full_name) LIKE ?)
+            {asset_filter}
+            ORDER BY full_name
+            LIMIT ?
+        """
+
+        df = con.execute(sql, params).fetchdf()
+
+        if df.empty:
+            console.print(f"\n[yellow]No results for:[/yellow] {query}\n")
+            return
+
+        console.print(f"\n[bold cyan]Results for '{query}'[/bold cyan]  ({len(df)} shown)\n")
+
+        result_table = Table(box=box.ROUNDED, show_lines=False)
+        result_table.add_column("ISIN", style="cyan", width=14)
+        result_table.add_column("Type", style="magenta", width=6)
+        result_table.add_column("CFI", style="yellow", width=8)
+        result_table.add_column("Name", style="white")
+        result_table.add_column("CCY", style="green", width=5)
+
+        for _, row in df.iterrows():
+            result_table.add_row(
+                row['isin'],
+                str(row['instrument_type']) if row['instrument_type'] else '',
+                str(row['cfi_code']) if row['cfi_code'] else '',
+                str(row['full_name']) if row['full_name'] else '',
+                str(row['currency']) if row['currency'] else '',
+            )
+
+        console.print(result_table)
+        console.print()
+
+    except Exception as e:
+        console.print(f"\n[bold red]Error:[/bold red] {str(e)}\n")
+        raise click.Abort()
+
+
 @firds_cli.command(name='stats')
 def show_stats():
     """

@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Any
 import pandas as pd
 
 from .connection import DuckDBConnection
-from esma_dm.models.utils import CFI
+from esma_dm.models.utils import decode_cfi
 from esma_dm.utils import QueryBuilder
 
 
@@ -44,37 +44,30 @@ class DuckDBQueries:
         
         # Query master table first
         query = self.query_builder.get_instrument_by_isin(isin)
-        result = self.con.execute(query, [isin]).fetchone()
+        cursor = self.con.execute(query, [isin])
+        row = cursor.fetchone()
         
-        if not result:
+        if not row:
             return None
         
-        # Convert to dict
-        instrument = {
-            "isin": result[0],
-            "cfi_code": result[1],
-            "full_name": result[2],
-            "issuer": result[3],
-            "source_file": result[4],
-            "indexed_at": result[5],
-            "asset_type": result[6] if len(result) > 6 else None
-        }
+        # Build dict dynamically from column descriptions
+        columns = [desc[0] for desc in cursor.description]
+        instrument = dict(zip(columns, row))
         
         # Get CFI classification if available
-        if instrument["cfi_code"]:
+        if instrument.get("cfi_code"):
             try:
-                cfi_info = CFI.from_code(instrument["cfi_code"])
+                cfi_info = decode_cfi(instrument["cfi_code"])
                 instrument["cfi_classification"] = {
                     "category": cfi_info.category,
                     "group": cfi_info.group,
-                    "attribute1": cfi_info.attribute1,
-                    "attribute2": cfi_info.attribute2
+                    **cfi_info.attributes
                 }
             except Exception as e:
                 self.logger.warning(f"Failed to parse CFI code {instrument['cfi_code']}: {e}")
         
         # Try to get asset-specific details
-        asset_type = instrument["cfi_code"][0] if instrument["cfi_code"] else None
+        asset_type = instrument.get("instrument_type") or (instrument["cfi_code"][0] if instrument.get("cfi_code") else None)
         
         if asset_type and self.query_builder.validate_asset_type(asset_type):
             try:

@@ -4,6 +4,32 @@ All notable changes to the esma-dm project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.3.5] - 2026-03-08
+
+### Added - Instrument Lookup and Search CLI Commands
+
+Two new `firds` CLI commands for querying the FIRDS database directly from the terminal:
+
+`esma-dm firds reference <ISIN>`
+- Displays master fields (ISIN, CFI code, full name, short name, issuer, source file, instrument type)
+- Renders full CFI classification with human-readable attribute labels (e.g. Voting Right, Payment Status)
+- Shows asset-specific detail columns from the relevant typed table (e.g. `expiry_date`, `strike_price`, `underlying_instrument` for swaps and options)
+- Supports `--mode current|history`
+
+`esma-dm firds search <query>`
+- Case-insensitive match against instrument name and ISIN prefix
+- Supports `--asset` filter and `--limit`
+- Returns tabular results with ISIN, type, CFI code, name, and currency
+- Supports `--mode current|history`
+
+### Fixed - `get_instrument` column mapping in `storage/duckdb/queries.py`
+
+- `get_instrument()` was hardcoding positional indices for the result row. `BASE_FIELDS_CURRENT` includes `short_name` between `full_name` and `issuer`, so every field from `issuer` onward was misassigned (notably `instrument_type` was showing the `indexed_at` timestamp value).
+- Replaced positional mapping with cursor `.description`-based column mapping — fully robust to future schema changes.
+- Replaced non-existent `CFI.from_code()` call with `decode_cfi()`, which also returns all four CFI attribute labels with their full descriptions instead of generic `attribute1`/`attribute2` keys.
+
+---
+
 ## [0.3.4] - 2026-03-07
 
 ### Added - Complete FIRDS Instrument Model Layer (All 14 CFI Categories)

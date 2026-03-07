@@ -10,6 +10,8 @@ A comprehensive Python package for accessing ESMA (European Securities and Marke
 - **FITRS**: Financial Instruments Transparency System with equity and non-equity data
 - **10 Asset Types**: Full support for C, D, E, F, H, I, J, O, R, S instrument types
 - **CFI Classification**: Complete ISO 10962 decoding with full attribute descriptions
+- **Instrument Lookup**: `esma-dm firds reference <ISIN>` — master fields, CFI classification, and typed detail columns
+- **Instrument Search**: `esma-dm firds search <query>` — search by name or ISIN prefix with asset-type filter
 - **Complete Field Coverage**: Full name, short name, and all ESMA reference data fields
 - **High Performance**: Vectorized bulk loading at 33,000+ instruments/second
 - **DuckDB Storage**: Fast analytical queries on star schema with 12 normalized tables
@@ -174,6 +176,44 @@ esma-dm firds cache --type FULINS --asset D
 ```
 
 The command displays file name, size, and modification date in a formatted table.
+
+#### Look Up an Instrument by ISIN
+
+Query the local database for a single instrument:
+
+```bash
+# Equity lookup — master fields, CFI classification, equity-specific detail
+esma-dm firds reference US0378331005
+
+# Swap lookup — shows expiry, underlying, delivery type
+esma-dm firds reference EZGR2K9V7V85
+
+# Swedish equity
+esma-dm firds reference SE0000242455
+```
+
+Output includes three sections:
+1. **Master fields** — ISIN, CFI code, full name, short name, issuer LEI, source file, instrument type
+2. **CFI Classification** — category, group, and all four ISO 10962 attribute labels with full descriptions
+3. **Asset-Specific Fields** — columns from the typed detail table (e.g. `expiry_date`, `strike_price`, `underlying_instrument`, `delivery_type`)
+
+#### Search Instruments by Name or ISIN
+
+Search the local database by instrument name or ISIN prefix:
+
+```bash
+# Search by name (case-insensitive)
+esma-dm firds search "apple"
+
+# Narrow to a specific asset type
+esma-dm firds search "volkswagen" --asset E --limit 10
+
+# Search by ISIN prefix
+esma-dm firds search "US0378"
+
+# Search across swaps
+esma-dm firds search "equity swap" --asset S --limit 20
+```
 
 #### Inspect File Structure
 
