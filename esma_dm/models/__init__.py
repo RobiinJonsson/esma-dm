@@ -1,13 +1,14 @@
 """
 ESMA Reference Data Models
 
-Normalized data models for ESMA FIRDS reference data.
+Normalized data models for ESMA FIRDS reference data and FITRS transparency data.
 """
 from .base import Instrument, TradingVenueAttributes, TechnicalAttributes, RecordType
 from .debt import DebtInstrument
 from .equity import EquityInstrument
 from .derivative import DerivativeInstrument, OptionAttributes, FutureAttributes
 from .mapper import InstrumentMapper
+from .transparency import EquityTransparencyRecord, NonEquityTransparencyRecord
 from .subtypes import (
     EquitySwap,
     Swaption,
@@ -22,6 +23,7 @@ from .subtypes import (
 )
 
 __all__ = [
+    # FIRDS reference data models
     'Instrument',
     'TradingVenueAttributes',
     'TechnicalAttributes',
@@ -32,6 +34,9 @@ __all__ = [
     'OptionAttributes',
     'FutureAttributes',
     'InstrumentMapper',
+    # FITRS transparency models
+    'EquityTransparencyRecord',
+    'NonEquityTransparencyRecord',
     # Subtype output models
     'EquitySwap',
     'Swaption',

@@ -127,32 +127,48 @@ def list_files(file_type: Optional[str], instrument_type: Optional[str],
               type=click.Choice(['equity', 'non-equity'], case_sensitive=False),
               required=True,
               help='Instrument type to download')
+@click.option('--asset', 'asset_type',
+              type=click.Choice(['C', 'D', 'E', 'F', 'H', 'I', 'J', 'O', 'R', 'S'],
+                                case_sensitive=False),
+              default=None,
+              help='CFI asset type filter (e.g. E=Equities, D=Debt, S=Swaps). '
+                   'Omit to download all asset types for the instrument.')
 @click.option('--update', is_flag=True, default=False,
               help='Force re-download (ignore cache)')
-def download_files(instrument_type: str, update: bool):
+def download_files(instrument_type: str, asset_type: Optional[str], update: bool):
     """
     Download latest FITRS full files for an instrument type.
-    
+
+    Optionally filter to a single CFI asset type with --asset.
+
     Examples:
-    
+
         esma-dm fitrs download --instrument equity
-        
+
+        esma-dm fitrs download --instrument equity --asset E
+
+        esma-dm fitrs download --instrument non-equity --asset D
+
         esma-dm fitrs download --instrument non-equity --update
     """
+    label = instrument_type
+    if asset_type:
+        label = f"{instrument_type} / asset {asset_type.upper()}"
     try:
-        console.print(f"\n[bold cyan]Downloading {instrument_type} FITRS files...[/bold cyan]\n")
-        
+        console.print(f"\n[bold cyan]Downloading {label} FITRS files...[/bold cyan]\n")
+
         # Initialize file manager
         config = Config()
         cache_dir = config.downloads_path / 'fitrs'
         manager = FITRSFileManager(cache_dir=cache_dir)
-        
+
         # Download files
         paths = manager.download_latest_full_files(
             instrument_type=instrument_type,
+            asset_type=asset_type,
             update=update
         )
-        
+
         if not paths:
             console.print("[yellow]No files downloaded.[/yellow]\n")
             return
@@ -223,7 +239,7 @@ def list_cache(file_type: Optional[str], instrument_type: Optional[str]):
                 mod_time
             )
         
-        console.print(f"\n{table}")
+        console.print(table)
         console.print(f"\n[bold]Total: {len(files)} file(s), {total_size:.2f} MB[/bold]\n")
         
     except Exception as e:

@@ -5,8 +5,6 @@ Python package for accessing ESMA (European Securities and Markets Authority) pu
 
 ## Architecture Overview
 
-## Architecture Overview
-
 ### Modular Design (2026-01-11 Refactoring)
 
 The package follows a clean, modular architecture with four main layers:
@@ -19,7 +17,11 @@ The package follows a clean, modular architecture with four main layers:
      - `delta_processor.py`: Delta file processing (164 lines)
      - `enums.py`: Type definitions (71 lines)
      - `models.py`: Data models (53 lines)
-   - `FITRSClient`: Transparency/liquidity metrics
+   - `fitrs.py`: FITRS client (single flat module, 673 lines)
+     - `FITRSClient`: Main class — downloads transparency files from ESMA FITRS SOLR endpoint
+     - Key methods: `get_file_list()`, `get_latest_full_files(asset_type, instrument_type)`, `index_transparency_data(file_type, asset_type)`, `transparency(isin)`, `query_transparency(...)`, `query_subclass_transparency(...)`
+     - File type routing: `FULECR`/`FULNCR`/`DLTECR`/`DLTNCR` → `transparency` table; `FULNCR_NYAR`/`FULNCR_SISC` → `subclass_transparency` table
+     - NOTE: `clients/fitrs/` directory exists but is empty — client lives in flat `clients/fitrs.py`
    - `BenchmarksClient`, `SSRClient`: Other ESMA datasets
 
 2. **Storage Layer** (`esma_dm/storage/`): DuckDB implementation with organized structure
@@ -31,7 +33,11 @@ The package follows a clean, modular architecture with four main layers:
      - `versioning.py`: Delta processing and version management (342 lines)
    - `schema/`: Table definitions organized by purpose (in operations.py)
    - `bulk/`: Vectorized bulk loading operations (in operations.py)
-   - `fitrs/`: FITRS-specific storage components
+   - `fitrs/store.py`: `FITRSStorage` — DuckDB backend for transparency data
+     - Default DB path: `downloads/fitrs.db` (note: not under `downloads/data/fitrs/`)
+     - Tables: `transparency` (29 columns, ISIN-level), `subclass_transparency`, `equity_transparency`, `non_equity_transparency`, `transparency_metadata`
+     - Key methods: `insert_transparency_data(df, file_type)`, `insert_subclass_transparency_data(df, file_type)`, `get_transparency(isin)`, `attach_firds_database(path)`
+   - `schema/fitrs_schema.py`: All FITRS table DDL and schema metadata (260 lines)
 
 3. **Utilities Layer** (`esma_dm/utils/`): Shared components eliminating duplication
    - `validators.py`: ISO standard validators (ISIN/ISO 6166, LEI/ISO 17442, CFI/ISO 10962, MIC/ISO 10383)
@@ -262,28 +268,41 @@ from esma_dm.clients.firds import FIRDSClient
 
 ### Key Project Structure
 
-Current workspace organization (as of 2026-01-25):
+Current workspace organization (as of 2026-02-23):
 ```
 esma_dm/
-├── clients/firds/          # 6 focused modules (1,452 lines total)
-│   ├── client.py          # Main orchestrator
-│   ├── downloader.py      # File download and caching  
-│   ├── parser.py          # CSV parsing and mapping
-│   ├── delta_processor.py # Delta file processing
-│   ├── enums.py          # Type definitions
-│   └── models.py         # Data models
-├── storage/duckdb/        # 5 focused modules (1,609 lines total)
-│   ├── __init__.py       # DuckDBStorage orchestrator
-│   ├── connection.py     # Database management
-│   ├── operations.py     # Bulk insert/update operations
-│   ├── queries.py        # Retrieval and search queries
-│   └── versioning.py     # Delta processing and version management
-├── utils/                 # Shared utilities eliminating duplication
-│   ├── validators.py     # ISO standard validators
-│   ├── constants.py      # ESMA URLs and configuration  
-│   ├── query_builder.py  # Reusable SQL patterns
-│   └── shared_utils.py   # Common utilities
-└── reference_api.py       # High-level query interface (314 lines)
+├── clients/
+│   ├── firds/              # 6 focused modules (1,452 lines total)
+│   │   ├── client.py      # Main orchestrator
+│   │   ├── downloader.py  # File download and caching
+│   │   ├── parser.py      # CSV parsing and mapping
+│   │   ├── delta_processor.py  # Delta file processing
+│   │   ├── enums.py       # Type definitions
+│   │   └── models.py      # Data models
+│   └── fitrs.py            # FITRSClient (flat module, 673 lines)
+├── storage/
+│   ├── duckdb/             # 5 focused modules (1,609 lines total)
+│   │   ├── __init__.py    # DuckDBStorage orchestrator
+│   │   ├── connection.py  # Database management
+│   │   ├── operations.py  # Bulk insert/update operations
+│   │   ├── queries.py     # Retrieval and search queries
+│   │   └── versioning.py  # Delta processing and version management
+│   ├── fitrs/
+│   │   └── store.py       # FITRSStorage DuckDB backend
+│   └── schema/
+│       └── fitrs_schema.py  # FITRS table DDL
+├── file_manager/
+│   └── fitrs/              # FITRSFileManager (CLI download/cache layer)
+│       └── manager.py
+├── models/
+│   └── transparency_enums.py  # Methodology, InstrumentClassification, FileType, SegmentationCriteria
+├── utils/                  # Shared utilities eliminating duplication
+│   ├── validators.py      # ISO standard validators
+│   ├── constants.py       # ESMA URLs and configuration
+│   ├── query_builder.py   # Reusable SQL patterns
+│   └── shared_utils.py    # Common utilities
+├── reference_api.py        # High-level FIRDS query interface (314 lines)
+└── transparency_api.py     # Thin facade over FITRSClient for edm.transparency
 ```
 
 ### Testing
@@ -303,6 +322,85 @@ stats = firds.get_store_stats()  # Returns instrument counts by type
 # Direct SQL (for complex queries)
 result = firds.data_store.con.execute("SELECT * FROM instruments WHERE cfi_code LIKE 'E%'").fetchdf()
 ```
+
+### FITRS Transparency Workflow
+
+```python
+from esma_dm import FITRSClient
+fitrs = FITRSClient()
+
+# List available files from ESMA FITRS register
+files_df = fitrs.get_file_list()
+
+# Download and cache files (equity full transparency)
+fitrs.get_latest_full_files(asset_type='E')
+
+# Full ETL pipeline: list → filter → download → insert into DuckDB
+fitrs.index_transparency_data(file_type='FULECR', asset_type='E', latest_only=True)
+
+# Also index non-equity transparency
+fitrs.index_transparency_data(file_type='FULNCR', latest_only=True)
+
+# Sub-class transparency (NYAR = new assessment per asset class, SISC = sub-instrument sub-class)
+fitrs.index_transparency_data(file_type='FULNCR_NYAR')
+fitrs.index_transparency_data(file_type='FULNCR_SISC')
+
+# Point lookup
+transparency = fitrs.transparency('GB00B1YW4409')  # Returns dict
+
+# Parameterised query → DataFrame
+df = fitrs.query_transparency(liquid_market=True, methodology='SINT', limit=100)
+df_sub = fitrs.query_subclass_transparency(asset_class='SHRS')
+
+# Cross-database JOIN with FIRDS
+fitrs.data_store.attach_firds_database('downloads/data/firds/firds_current.duckdb')
+```
+
+**CLI commands** (use `FITRSFileManager`, file-oriented, independent of DB):
+```bash
+python -m esma_dm fitrs list                   # Lists ESMA register files (paginated Rich table)
+python -m esma_dm fitrs download               # Downloads latest full files (equity + non-equity)
+python -m esma_dm fitrs cache                  # Lists locally cached CSV files by type/instrument
+python -m esma_dm fitrs stats                  # Cache statistics: counts by file type and instrument
+python -m esma_dm fitrs types                  # Prints all file type codes with descriptions
+python -m esma_dm fitrs fields <path>          # Reads CSV header and prints column names + dtypes
+python -m esma_dm fitrs head <path>            # Prints first N rows of a CSV file
+```
+
+**FITRS file type taxonomy**:
+- `FULECR`: Full Equity Calculation Results (ISIN-level)
+- `FULNCR`: Full Non-Equity Calculation Results (ISIN-level)
+- `DLTECR`: Delta Equity Calculation Results (ISIN-level)
+- `DLTNCR`: Delta Non-Equity Calculation Results (ISIN-level)
+- `FULNCR_NYAR`: Full Non-Equity sub-class results (new assessment per asset class)
+- `FULNCR_SISC`: Full Non-Equity sub-class results (sub-instrument sub-class)
+
+**Transparency enums** (from `esma_dm.models.transparency_enums`):
+- `Methodology`: `SINT`, `YEAR`, `ESTM`, `FFWK`
+- `InstrumentClassification`: `SHRS`, `DPRS`, `ETFS`, `OTHR`
+- `FileType`: classmethod helpers `is_equity()`, `is_non_equity()`, `is_subclass()`, `is_delta()`
+- `SegmentationCriteria`: 20+ sub-class segmentation criteria codes
+
+**High-level API** (via `edm.transparency`):
+```python
+import esma_dm as edm
+
+# Point lookup
+instrument = edm.transparency('GB00B1YW4409')
+
+# Index methods
+edm.transparency.index('FULECR', asset_type='E')
+edm.transparency.query(liquid_market=True)
+edm.transparency.query_subclass(asset_class='SHRS')
+edm.transparency.attach_firds(path='downloads/data/firds/firds_current.duckdb')
+```
+
+**FITRS architecture note — two parallel file systems**:
+- CLI path: `FITRSFileManager` (`file_manager/fitrs/`) — `fitrs download` calls `Utils.download_and_parse_file()` internally, saving ``{stem}_data.csv`` to `downloads/data/fitrs/`; old files for the same type and earlier dates are removed automatically
+- API path: `FITRSClient` also uses `Utils.download_and_parse_file()` with the same `downloads/data/fitrs/` cache
+- Both paths use identical file naming (`*_data.csv`) — files produced by one are visible to the other
+- DB file: `downloads/fitrs.db` (root `downloads/`, not `downloads/data/fitrs/fitrs.db`)
+- FITRS zip files from ESMA contain XML (not CSV); `Utils.download_and_parse_file` handles extraction and XML parsing
 
 ### Delta File Processing (History Mode Only)
 ```python
@@ -421,15 +519,30 @@ python examples/03_cfi_classification.py
 ```
 
 ## Key Files Reference
+
+### FIRDS
 - `esma_dm/clients/firds/client.py`: Main client, 301 lines, all download/parse logic
 - `esma_dm/storage/duckdb/__init__.py`: Storage orchestrator, mode selection, bulk operations
 - `esma_dm/storage/duckdb/operations.py`: Table definitions, bulk insert operations
 - `esma_dm/storage/duckdb/queries.py`: Instrument retrieval and search logic
 - `esma_dm/models/mapper.py`: Field mapping, model selection
 - `esma_dm/models/utils/cfi.py`: ISO 10962 CFI decoding
+- `examples/02_index_with_filters.py`: Core workflow demonstration
+
+### FITRS
+- `esma_dm/clients/fitrs.py`: FITRSClient, 673 lines, full ETL and query logic
+- `esma_dm/storage/fitrs/store.py`: FITRSStorage DuckDB backend, 400 lines
+- `esma_dm/storage/schema/fitrs_schema.py`: FITRS table DDL (transparency, subclass_transparency), 260 lines
+- `esma_dm/models/transparency_enums.py`: Methodology, InstrumentClassification, FileType, SegmentationCriteria enums, 289 lines
+- `esma_dm/file_manager/fitrs/manager.py`: FITRSFileManager (CLI file listing/download/cache)
+- `esma_dm/transparency_api.py`: Thin facade for edm.transparency proxy
+- `esma_dm/cli/fitrs.py`: Click CLI commands (fitrs list/download/cache/stats/types/fields/head), 467 lines
+- `examples/06_transparency_data.py`: FITRS ETL and query demonstration
+- `examples/07_transparency_enums.py`: Transparency enum usage
+
+### Shared
 - `esma_dm/utils/validators.py`: ISO standard validators (ISIN, LEI, CFI, MIC)
 - `esma_dm/utils/constants.py`: ESMA URLs, file patterns, defaults
-- `examples/02_index_with_filters.py`: Core workflow demonstration
 
 ## What to Avoid
 - Emojis anywhere in the project

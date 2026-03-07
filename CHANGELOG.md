@@ -4,6 +4,32 @@ All notable changes to the esma-dm project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.3.3] - 2026-03-07
+
+### Changed - CFI Package Refactoring (ISO 10962)
+- Refactored `esma_dm/models/utils/cfi.py` (monolithic, 1219 lines) into a proper Python package at `esma_dm/models/utils/cfi/`.
+- One module per ISO 10962 category, each with a focused group enum, attribute value dicts, `decode_attributes()`, and `attribute_labels()` functions:
+  - `equity.py` — Category E: EquityGroup (S/P/C/F/D/L/Y/M)
+  - `debt.py` — Category D: DebtGroup (B/C/W/T/Y/S/E/G/A/N/D/M)
+  - `collective.py` — Category C: CIVGroup (I/H/B/E/S/F/P/M)
+  - `entitlements.py` — Category R: EntitlementsGroup (A/S/P/W/F/D/M)
+  - `options.py` — Category O: OptionsGroup (C/P)
+  - `futures.py` — Category F: FuturesGroup (F/C)
+  - `swaps.py` — Category S: SwapsGroup (R/T/E/C/F/M)
+  - `non_standard.py` — Category H: NonStandardGroup (R/T/E/C/F/M)
+  - `spot.py` — Category I: SpotGroup (F/T)
+  - `forwards.py` — Category J: ForwardsGroup (E/F/C/R/T)
+  - `strategies.py` — Category K: StrategiesGroup (R/T/E/C/F/Y/M)
+  - `financing.py` — Category L: FinancingGroup (L/R/S)
+  - `referential.py` — Category T: ReferentialGroup (C/T/R/I/B/D/M)
+  - `others.py` — Category M: OthersGroup (C/M)
+- `cfi_instrument_manager.py` centralises `CFI` dataclass, `decode_cfi()`, `get_attribute_labels()`, and `group_description()` with dispatch to the correct category module.
+- `_shared.py` holds attribute value dicts reused across multiple categories (FORM, DELIVERY variants, EXERCISE_STYLE_EAB, OPTION_STYLE_TYPE, VALUATION_METHOD, debt interest/guarantee/redemption, STANDARDIZATION, PAYOUT_TRIGGER).
+- `category.py` holds the `Category` enum (unchanged).
+- `__init__.py` re-exports all public symbols; all existing import paths remain backward-compatible.
+- Updated `esma_dm/models/utils/__init__.py` to expose all 14 group enums and the new helper functions.
+- Old `cfi.py` preserved as `cfi_legacy.py`.
+
 ## [0.3.2] - 2026-02-07
 
 ### Added - Shared Resources & FITRS File Management

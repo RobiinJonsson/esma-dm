@@ -90,19 +90,19 @@ class FITRSFileManager(FileManager):
     def _build_filters(self, **kwargs) -> List[str]:
         """Build FITRS-specific filters for queries."""
         filters = []
-        
+
         file_type = kwargs.get('file_type')
         instrument_type = kwargs.get('instrument_type')
-        
+
         if file_type:
-            filters.append(f'file_type:*{file_type}*')
-        
+            filters.append(f'file_name:*{file_type}*')
+
         if instrument_type:
             if instrument_type.lower() == 'equity':
-                filters.append('(file_type:*ECR*)')
+                filters.append('file_name:*ECR*')
             elif instrument_type.lower() == 'non-equity':
-                filters.append('(file_type:*NCR*)')
-        
+                filters.append('file_name:*NCR*')
+
         return filters
     
     def _filter_cached_files(self, files: List[Path], **kwargs) -> List[Path]:
@@ -191,23 +191,27 @@ class FITRSFileManager(FileManager):
         # Build query parts
         query_parts = []
         
-        # Add file type filter
+        # Add file type filter — match against file_name, not file_type
+        # (SOLR file_type field contains 'Full'/'Delta'; FULECR/FULNCR codes are in file_name)
         if file_type:
             try:
                 FileType(file_type)  # Validate
-                query_parts.append(f'file_type:*{file_type}*')
+                query_parts.append(f'file_name:*{file_type}*')
             except ValueError:
                 valid_types = [t.value for t in FileType]
                 raise ValueError(f"Invalid file_type '{file_type}'. Must be one of: {valid_types}")
-        
+
         # Add instrument type filter
         if instrument_type:
             if instrument_type.lower() == 'equity':
-                query_parts.append('(file_type:*ECR*)')
+                query_parts.append('file_name:*ECR*')
             elif instrument_type.lower() == 'non-equity':
-                query_parts.append('(file_type:*NCR*)')
+                query_parts.append('file_name:*NCR*')
             else:
-                raise ValueError(f"Invalid instrument_type '{instrument_type}'. Must be 'equity' or 'non-equity'")
+                raise ValueError(
+                    f"Invalid instrument_type '{instrument_type}'. "
+                    "Must be 'equity' or 'non-equity'"
+                )
         
         # Build filter query string
         filter_query = ' AND '.join(query_parts) if query_parts else ''
@@ -263,20 +267,27 @@ class FITRSFileManager(FileManager):
     def download_latest_full_files(
         self,
         instrument_type: str = 'equity',
+        asset_type: Optional[str] = None,
         update: bool = False
     ) -> List[Path]:
         """
         Download latest full FITRS files for a specific instrument type.
-        
+
+        Downloads the latest-dated files from the ESMA register, extracts the
+        CSV from each zip, saves as ``<basename>_data.csv`` in the cache
+        directory, then removes superseded files of the same type/asset.
+
         Args:
             instrument_type: Instrument type ('equity' or 'non-equity')
+            asset_type: CFI first-character asset type filter (e.g. 'E', 'D', 'S').
+                        When omitted, all asset types for the instrument are downloaded.
             update: Force re-download even if cached
-        
+
         Returns:
-            List of paths to downloaded files
-        
+            List of paths to extracted CSV files
+
         Example:
-            >>> paths = manager.download_latest_full_files(instrument_type='equity')
+            >>> paths = manager.download_latest_full_files(instrument_type='equity', asset_type='E')
             >>> print(f"Downloaded {len(paths)} files")
         """
         # Determine file type based on instrument type
@@ -285,41 +296,140 @@ class FITRSFileManager(FileManager):
         elif instrument_type.lower() == 'non-equity':
             file_type = 'FULNCR'
         else:
-            raise ValueError(f"Invalid instrument_type '{instrument_type}'. Must be 'equity' or 'non-equity'")
-        
-        # List files
+            raise ValueError(
+                f"Invalid instrument_type '{instrument_type}'. Must be 'equity' or 'non-equity'"
+            )
+
+        # Normalise asset type
+        asset_filter = asset_type.upper() if asset_type else None
+
+        # List files from ESMA register
         files = self.list_files(file_type=file_type, fetch_all=True)
-        
+
         if not files:
             self.logger.warning(f"No {file_type} files found")
             return []
-        
-        # Group by date and get latest
-        files_by_date = {}
+
+        # Apply asset type filter if requested
+        if asset_filter:
+            files = [f for f in files if f.asset_type == asset_filter]
+            if not files:
+                self.logger.warning(
+                    f"No {file_type} files found for asset type '{asset_filter}'"
+                )
+                return []
+
+        # Group by date and pick the latest publication date
+        files_by_date: Dict[str, List] = {}
         for f in files:
             date_str = f.publication_date.strftime('%Y%m%d')
-            if date_str not in files_by_date:
-                files_by_date[date_str] = []
-            files_by_date[date_str].append(f)
-        
+            files_by_date.setdefault(date_str, []).append(f)
+
         latest_date = max(files_by_date.keys())
         latest_files = files_by_date[latest_date]
-        
-        self.logger.info(f"Found {len(latest_files)} files for latest date {latest_date}")
-        
-        # Download files
-        downloaded = []
+
+        self.logger.info(
+            f"Downloading {len(latest_files)} {file_type}"
+            + (f" ({asset_filter})" if asset_filter else "")
+            + f" file(s) for {latest_date}"
+        )
+
+        # Download each part, extract zip → CSV, collect resulting CSV paths
+        downloaded_csvs: List[Path] = []
         for file_obj in latest_files:
-            path = self.downloader.download_file(
+            csv_path = self._download_and_extract(
                 url=file_obj.download_link,
                 filename=file_obj.filename,
-                force=update,
-                show_progress=True
+                force=update
             )
-            if path:
-                downloaded.append(path)
-        
-        return downloaded
+            if csv_path:
+                downloaded_csvs.append(csv_path)
+
+        if downloaded_csvs:
+            # Remove older cached CSVs for this file_type (and asset_type if specified)
+            self._remove_old_cached_files(
+                file_type=file_type,
+                keep_date=latest_date,
+                asset_type=asset_filter
+            )
+
+        return downloaded_csvs
+
+    def _download_and_extract(
+        self,
+        url: str,
+        filename: str,
+        force: bool = False
+    ) -> Optional[Path]:
+        """
+        Download a FITRS zip from ESMA, parse the XML it contains, and save
+        the result as a ``{stem}_data.csv`` file in the cache directory.
+
+        Delegates to ``Utils.download_and_parse_file`` which handles zip
+        extraction, XML parsing, and CSV caching.
+
+        Args:
+            url: Download URL for the zip file
+            filename: Expected zip filename (e.g. ``FULECR_20260221_E_1of1.zip``)
+            force: Re-download and re-parse even if the CSV already exists
+
+        Returns:
+            Path to the cached CSV file, or None on failure
+        """
+        stem = Path(filename).stem  # e.g. FULECR_20260221_E_1of1
+        csv_path = self.downloader.cache_dir / f"{stem}_data.csv"
+
+        if csv_path.exists() and not force:
+            self.logger.info(f"Using cached CSV: {csv_path.name}")
+            return csv_path
+
+        try:
+            self._utils.download_and_parse_file(url=url, data_type='fitrs', update=force)
+            return csv_path if csv_path.exists() else None
+        except Exception as e:
+            self.logger.error(f"Failed to download/parse {filename}: {e}")
+            return None
+
+    def _remove_old_cached_files(
+        self,
+        file_type: str,
+        keep_date: str,
+        asset_type: Optional[str] = None
+    ) -> int:
+        """
+        Delete cached CSV files for a file type that pre-date ``keep_date``.
+
+        When ``asset_type`` is given only files matching that asset class are
+        removed; otherwise all asset classes for the file type are cleaned up.
+
+        Args:
+            file_type: File type prefix to match (e.g. ``FULECR``)
+            keep_date: Date string in ``YYYYMMDD`` format to preserve
+            asset_type: Optional CFI asset class letter (e.g. ``'E'``)
+
+        Returns:
+            Number of files deleted
+        """
+        if asset_type:
+            # Scope to a specific asset: FULECR_<old-date>_E_*_data.csv
+            old_pattern = re.compile(
+                rf'^{re.escape(file_type)}_(?!{re.escape(keep_date)})\d{{8}}'
+                rf'_{re.escape(asset_type)}_.*\.csv$'
+            )
+        else:
+            old_pattern = re.compile(
+                rf'^{re.escape(file_type)}_(?!{re.escape(keep_date)})\d{{8}}_.*\.csv$'
+            )
+        count = 0
+        for f in self.downloader.cache_dir.glob(f"{file_type}_*.csv"):
+            if old_pattern.match(f.name):
+                try:
+                    f.unlink()
+                    self.logger.info(f"Removed old cached file: {f.name}")
+                    count += 1
+                except OSError as e:
+                    self.logger.warning(f"Could not remove {f.name}: {e}")
+        return count
     
     def parse_file(self, file_path: Path) -> pd.DataFrame:
         """
@@ -350,25 +460,30 @@ class FITRSFileManager(FileManager):
         instrument_type: Optional[str] = None
     ) -> List[Path]:
         """
-        List cached FITRS files with optional filtering.
-        
+        List cached FITRS CSV files with optional filtering.
+
+        Only returns ``.csv`` files; database files and other non-data
+        files present in the cache directory are excluded.
+
         Args:
-            file_type: Filter by file type
+            file_type: Filter by file type (e.g. ``FULECR``)
             instrument_type: Filter by instrument type ('equity' or 'non-equity')
-        
+
         Returns:
             List of cached file paths
         """
-        pattern = "*"
-        
         if file_type:
-            pattern = f"{file_type}*"
+            pattern = f"{file_type}*.csv"
         elif instrument_type:
             if instrument_type.lower() == 'equity':
-                pattern = "*ECR*"
+                pattern = "*ECR*.csv"
             elif instrument_type.lower() == 'non-equity':
-                pattern = "*NCR*"
-        
+                pattern = "*NCR*.csv"
+            else:
+                pattern = "*.csv"
+        else:
+            pattern = "*.csv"
+
         return self.downloader.get_cached_files(pattern)
     
     def get_file_stats(self) -> Dict[str, Any]:
@@ -443,26 +558,30 @@ class FITRSFileManager(FileManager):
                 return None
             
             # Parse filename to extract metadata
+            # Pattern groups: (1) file_type, (2) date, (3) asset_class, (4) part, (5) total
             match = self.FILENAME_PATTERN.match(filename)
             if match:
                 file_type = match.group(1)
                 date_str = match.group(2)
-                part_number = int(match.group(3))
-                total_parts = int(match.group(4))
+                asset_class = match.group(3)  # e.g. 'E', 'C', 'D', 'SHRS', ...
+                part_number = int(match.group(4))
+                total_parts = int(match.group(5))
             else:
                 # Fallback if pattern doesn't match
                 file_type = "UNKNOWN"
                 date_str = doc.get('creation_date', '').split('T')[0].replace('-', '')
+                asset_class = None
                 part_number = 1
                 total_parts = 1
-            
+
             # Determine instrument type
             instrument_type = 'equity' if 'ECR' in filename else 'non-equity' if 'NCR' in filename else None
-            
+
             return FITRSFile(
                 filename=filename,
                 file_type=file_type,
                 instrument_type=instrument_type,
+                asset_type=asset_class,
                 publication_date=self._parse_date(doc.get('creation_date')),
                 download_link=doc.get('download_link'),
                 file_size=doc.get('file_size'),

@@ -91,7 +91,7 @@ MAX_REQUEST_LIMIT = 1000
 
 # File naming patterns (regex patterns for parsing filenames)
 FIRDS_FILENAME_PATTERN = r'(FULINS|DLTINS|FULCAN)_([A-Z])_(\d{8})_(\d+)of(\d+)'
-FITRS_FILENAME_PATTERN = r'(FULECR|DLTECR|FULNCR|DLTNCR|FULNCR_NYAR|FULNCR_SISC)_(\d{8})_(\d+)of(\d+)'
+FITRS_FILENAME_PATTERN = r'(FULECR|DLTECR|FULNCR|DLTNCR|FULNCR_NYAR|FULNCR_SISC)_(\d{8})_([A-Z]+)_(\d+)of(\d+)'
 
 # HTTP request settings
 HTTP_TIMEOUT = 30  # seconds

@@ -639,7 +639,8 @@ esma-dm/
 │   │   └── fitrs_store.py     # FITRS storage with cross-database support
 │   ├── models/           # Data models and CFI classification
 │   │   ├── subtypes.py   # 8 specialized output models for major subtypes
-│   │   └── utils/        # CFI (ISO 10962) implementation
+│   │   └── utils/
+│   │       └── cfi/      # ISO 10962 package (one module per category + shared + manager)
 │   ├── reference_api.py  # Hierarchical reference API
 │   ├── transparency_api.py    # Transparency data API
 │   └── utils.py
@@ -667,11 +668,10 @@ esma-dm/
 - **Simple interface**: `edm.transparency('ISIN')` for direct lookups
 
 ### CFI Classification (ISO 10962)
-- Complete implementation of ISO 10962 standard
-- 14 categories: E, D, C, F, O, S, H, R, I, J, K, L, T, M
-- Comprehensive attribute decoders for all categories
-- Category and group descriptions
-- Integrated into reference data queries
+- Complete implementation of ISO 10962 across all 14 categories and all 6 CFI code positions
+- Modular package (`esma_dm/models/utils/cfi/`): one file per category, each with a dedicated group enum, attribute value dictionaries sourced from the ISO 10962 JSON, and `decode_attributes()` / `attribute_labels()` functions
+- Central `cfi_instrument_manager.py`: `CFI` dataclass, `decode_cfi()`, `get_attribute_labels()`, `group_description()` with automatic dispatch to the correct category module
+- All 14 group enums and helper functions re-exported through the package `__init__.py`; existing import paths unchanged
 
 ### DuckDB Storage
 - Star schema with master instruments table + 10 asset-specific tables

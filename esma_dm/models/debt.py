@@ -24,19 +24,16 @@ class DebtInstrument(Instrument):
     
     nominal_value_per_unit: Optional[float] = None
     """Nominal value per unit (RefData_DebtInstrmAttrbts_NmnlValPerUnit)"""
-    
-    fixed_interest_rate: Optional[float] = None
-    """Fixed interest rate (RefData_DebtInstrmAttrbts_IntrstRate_Fxd)"""
-    
+
     debt_seniority: Optional[str] = None
-    """Debt seniority level (RefData_DebtInstrmAttrbts_DebtSnrty)"""
-    
+    """Debt seniority level (RefData_DebtInstrmAttrbts_DebtSnrty): SNDB=Senior, SBOD=Subordinated, etc."""
+
     # Interest rate information
     interest_rate_type: Optional[str] = None
-    """Type of interest rate: 'fixed', 'floating', or None"""
-    
+    """Type of interest rate: 'fixed', 'floating', or None — derived during mapping"""
+
     fixed_rate: Optional[float] = None
-    """Fixed interest rate (if applicable)"""
+    """Fixed interest rate (RefData_DebtInstrmAttrbts_IntrstRate_Fxd)"""
     
     floating_rate_reference_isin: Optional[str] = None
     """Reference rate ISIN for floating rate (if applicable)"""
@@ -76,12 +73,12 @@ class DebtInstrument(Instrument):
             'maturity_date': {'type': 'date', 'description': 'Maturity date of the debt instrument'},
             'nominal_value_per_unit': {'type': 'float', 'description': 'Nominal value per unit'},
             'debt_seniority': {'type': 'str', 'description': 'Debt seniority level (SNDB=Senior, SBOD=Subordinated, etc.)'},
-            'interest_rate_type': {'type': 'str', 'description': "Type of interest rate: 'fixed', 'floating', or None"},
-            'fixed_rate': {'type': 'float', 'description': 'Fixed interest rate (if applicable)'},
-            'floating_rate_reference_isin': {'type': 'str', 'description': 'Reference rate ISIN for floating rate (if applicable)'},
-            'floating_rate_reference_index': {'type': 'str', 'description': 'Reference index for floating rate (e.g., EURIBOR, LIBOR)'},
+            'interest_rate_type': {'type': 'str', 'description': "Derived type: 'fixed', 'floating', or None"},
+            'fixed_rate': {'type': 'float', 'description': 'Fixed interest rate (RefData_DebtInstrmAttrbts_IntrstRate_Fxd)'},
+            'floating_rate_reference_isin': {'type': 'str', 'description': 'Reference rate ISIN for floating rate'},
+            'floating_rate_reference_index': {'type': 'str', 'description': 'Reference index for floating rate (e.g. EURIBOR, LIBOR)'},
             'floating_rate_reference_name': {'type': 'str', 'description': 'Reference rate name for floating rate'},
-            'floating_rate_term_unit': {'type': 'str', 'description': 'Term unit for floating rate (e.g., MNTH, YEAR)'},
+            'floating_rate_term_unit': {'type': 'str', 'description': 'Term unit for floating rate (e.g. MNTH, YEAR)'},
             'floating_rate_term_value': {'type': 'int', 'description': 'Term value for floating rate'},
             'floating_rate_basis_points': {'type': 'float', 'description': 'Basis points spread for floating rate'},
         }

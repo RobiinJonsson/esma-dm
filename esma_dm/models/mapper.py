@@ -51,28 +51,21 @@ class InstrumentMapper:
     }
     
     DEBT_FIELD_MAP = {
-        # Actual debt fields from FIRDS
+        # Core debt attributes — actual FIRDS column names (after RefData_ prefix strip)
         'DebtInstrmAttrbts_TtlIssdNmnlAmt': 'total_issued_nominal_amount',
-        'DebtInstrmAttrbts_MtrtyDt': 'maturity_date', 
+        'DebtInstrmAttrbts_MtrtyDt': 'maturity_date',
         'DebtInstrmAttrbts_NmnlValPerUnit': 'nominal_value_per_unit',
-        'DebtInstrmAttrbts_IntrstRate_Fxd': 'fixed_interest_rate',
+        'DebtInstrmAttrbts_IntrstRate_Fxd': 'fixed_rate',
         'DebtInstrmAttrbts_DebtSnrty': 'debt_seniority',
-        'TradgVnRltdAttrbts_TermntnDt': 'trading_venue.termination_date',
-        
-        # Technical attributes (both spellings)
-        'TechRcrdAttrbts_RlvntCmptntAuthrty': 'technical.relevant_competent_authority',
-        'TechAttrbts_RlvntCmptntAuthrty': 'technical.relevant_competent_authority',
-        'TechRcrdAttrbts_PblctnPrd_FrDt': 'technical.publication_period_from',
-        'TechAttrbts_PblctnPrd_FrDt': 'technical.publication_period_from',
-        'TechRcrdAttrbts_RlvntTradgVn': 'technical.relevant_trading_venue',
-        
-        # DLTINS-specific fields
-        'ModfdRcrd_New': 'record_type',
-        'NewRcrd': 'record_type',
-        'TermntdRcrd': 'record_type',
-        'RlvntCmptntAuthrty': 'reporting_authority',
+        # Floating rate fields — actual FIRDS column names
+        'DebtInstrmAttrbts_IntrstRate_Fltg_RefRate_ISIN': 'floating_rate_reference_isin',
+        'DebtInstrmAttrbts_IntrstRate_Fltg_RefRate_Indx': 'floating_rate_reference_index',
+        'DebtInstrmAttrbts_IntrstRate_Fltg_RefRate_Nm': 'floating_rate_reference_name',
+        'DebtInstrmAttrbts_IntrstRate_Fltg_Term_Unit': 'floating_rate_term_unit',
+        'DebtInstrmAttrbts_IntrstRate_Fltg_Term_Val': 'floating_rate_term_value',
+        'DebtInstrmAttrbts_IntrstRate_Fltg_BsisPtSprd': 'floating_rate_basis_points',
     }
-    
+
     @staticmethod
     def _normalize_column_name(col: str) -> str:
         """Normalize column name by removing common prefixes."""
@@ -80,60 +73,56 @@ class InstrumentMapper:
         if col.startswith('RefData_'):
             col = col[8:]  # len('RefData_') = 8
         return col
-    
-    DEBT_FIELD_MAP = {
-        'DebtInstrmAttrbts_TtlIssdNmnlAmt': 'total_issued_nominal_amount',
-        'DebtInstrmAttrbts_MtrtyDt': 'maturity_date',
-        'DebtInstrmAttrbts_NmnlValPerUnit': 'nominal_value_per_unit',
-        'DebtInstrmAttrbts_IntrstRate_Fxd': 'fixed_rate',
-        'DebtInstrmAttrbts_IntrstRate_FltgRate_RefRate_ISIN': 'floating_rate_reference_isin',
-        'DebtInstrmAttrbts_IntrstRate_FltgRate_RefRate_Indx_Nm': 'floating_rate_reference_index',
-        'DebtInstrmAttrbts_IntrstRate_FltgRate_RefRate_Nm': 'floating_rate_reference_name',
-        'DebtInstrmAttrbts_IntrstRate_FltgRate_RefRate_Term_Unit': 'floating_rate_term_unit',
-        'DebtInstrmAttrbts_IntrstRate_FltgRate_RefRate_Term_Val': 'floating_rate_term_value',
-        'DebtInstrmAttrbts_IntrstRate_FltgRate_Rate': 'floating_rate_basis_points',
-        'DebtInstrmAttrbts_SnrtyTp': 'debt_seniority',
-    }
-    
+
     EQUITY_FIELD_MAP = {
-        'FinInstrmGnlAttrbts_DvddPmtFrqcy': 'dividend_payment_frequency',
-        'FinInstrmGnlAttrbts_VtngRghtsPerShr': 'voting_rights_per_share',
-        'FinInstrmGnlAttrbts_OwnrshpRstrctn': 'ownership_restriction',
-        'FinInstrmGnlAttrbts_RdmptnTp': 'redemption_type',
-        'FinInstrmGnlAttrbts_CptlInvstmntRstrctn': 'capital_investment_restriction',
+        # Structured equity only: underlying instrument (e.g. CFI EY*)
+        'DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN': 'underlying_instrument',
     }
-    
+
     DERIVATIVE_FIELD_MAP = {
+        # Common derivative fields — actual FIRDS column names
         'DerivInstrmAttrbts_XpryDt': 'expiry_date',
         'DerivInstrmAttrbts_PricMltplr': 'price_multiplier',
         'DerivInstrmAttrbts_DlvryTp': 'delivery_type',
-        'DerivInstrmAttrbts_UndrlygInstrm_ISIN': 'underlying_isin',
-        'DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN': 'underlying_instrument',  # Actual FIRDS field
-        'DerivInstrmAttrbts_AsstClssSpcfc_Cmmdty_Pdct_Nrgy_Oil_BasePdct': 'asset_class_base_product',
-        'DerivInstrmAttrbts_AsstClssSpcfc_Cmmdty_Pdct_Nrgy_Oil_SubPdct': 'asset_class_sub_product',
-        'DerivInstrmAttrbts_AsstClssSpcfc_Cmmdty_Pdct_Nrgy_Oil_AddtlSubPdct': 'asset_class_further_sub',
-        'DerivInstrmAttrbts_AsstClssSpcfc_Envtl_Pdct_Emis_EmisAllctn_Unit': 'asset_class_transaction_type',
-        'DerivInstrmAttrbts_NtnlCcy_1': 'notional_currency_1',
-        'DerivInstrmAttrbts_NtnlCcy_2': 'notional_currency_2',
-        
-        # Commodity attributes
-        'DerivInstrmAttrbts_BasePdct': 'base_product',
-        'DerivInstrmAttrbts_SubPdct': 'sub_product',
-        'DerivInstrmAttrbts_FrthrSubPdct': 'further_sub_product',
-        'DerivInstrmAttrbts_TxTp': 'transaction_type',
-        'DerivInstrmAttrbts_FnlPricTp': 'final_price_type',
-        
+
+        # Underlying instrument references
+        'DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN': 'underlying_isin',
+        'DerivInstrmAttrbts_UndrlygInstrm_Sngl_LEI': 'underlying_lei',
+        'DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN': 'underlying_basket_isin',
+        'DerivInstrmAttrbts_UndrlygInstrm_Bskt_LEI': 'underlying_basket_lei',
+
+        # Underlying index references
+        'DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_ISIN': 'underlying_index_isin',
+        'DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm': 'underlying_index_name',
+        'DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Indx': 'underlying_index_reference_index',
+        'DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Unit': 'underlying_index_term_unit',
+        'DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Val': 'underlying_index_term_value',
+
         # Option attributes
         'DerivInstrmAttrbts_OptnTp': 'option_attrs.option_type',
-        'DerivInstrmAttrbts_StrkPric': 'option_attrs.strike_price',
-        'DerivInstrmAttrbts_StrkPricCcy': 'option_attrs.strike_price_currency',
-        'DerivInstrmAttrbts_OptnStyle': 'option_attrs.option_style',
         'DerivInstrmAttrbts_OptnExrcStyle': 'option_attrs.option_style',
-        'DerivInstrmAttrbts_ValDtOfTheFutr': 'future_attrs.futures_value_date',
-        
-        # Future attributes
-        'DerivInstrmAttrbts_DlvryTp': 'future_attrs.delivery_type',
-        'DerivInstrmAttrbts_XchgToTradgFr': 'future_attrs.exchange_to_traded_for',
+        'DerivInstrmAttrbts_StrkPric_Pric_MntryVal_Amt': 'option_attrs.strike_price_amount',
+        'DerivInstrmAttrbts_StrkPric_Pric_MntryVal_Sgn': 'option_attrs.strike_price_sign',
+        'DerivInstrmAttrbts_StrkPric_Pric_Pctg': 'option_attrs.strike_price_percentage',
+        'DerivInstrmAttrbts_StrkPric_Pric_BsisPts': 'option_attrs.strike_price_basis_points',
+        'DerivInstrmAttrbts_StrkPric_NoPric_Pdg': 'option_attrs.no_price_condition',
+        'DerivInstrmAttrbts_StrkPric_NoPric_Ccy': 'option_attrs.no_price_currency',
+
+        # FX-specific attributes
+        'DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_FxTp': 'fx_type',
+        'DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_OthrNtnlCcy': 'other_notional_currency',
+
+        # Interest rate swap attributes
+        'DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_RefRate_Nm': 'interest_rate_reference_name',
+        'DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_RefRate_Indx': 'interest_rate_reference_index',
+        'DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_Term_Unit': 'interest_rate_term_unit',
+        'DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_Term_Val': 'interest_rate_term_value',
+        'DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_FrstLegIntrstRate_Fxd': 'first_leg_rate_fixed',
+        'DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_OthrLegIntrstRate_Fxd': 'other_leg_rate_fixed',
+
+        # Commodity attributes — transaction/price type (asset-class agnostic)
+        'DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_TxTp': 'transaction_type',
+        'DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_FnlPricTp': 'final_price_type',
     }
     
     @staticmethod
@@ -284,7 +273,9 @@ class InstrumentMapper:
             publication_period_from=cls._parse_date(
                 cls._get_value(row, 'TechRcrdAttrbts_PblctnPrd_FrDt', 'TechAttrbts_PblctnPrd_FrDt')
             ),
-            relevant_trading_venue=cls._parse_string(cls._get_value(row, 'TechRcrdAttrbts_RlvntTradgVn')),
+            relevant_trading_venue=cls._parse_string(
+                cls._get_value(row, 'TechRcrdAttrbts_RlvntTradgVn', 'TechAttrbts_RlvntTradgVn')
+            ),
             never_published=cls._parse_bool(cls._get_value(row, 'TechRcrdAttrbts_NvrPblshd')),
         )
     
@@ -332,67 +323,114 @@ class InstrumentMapper:
     def _extract_option_attrs(cls, row: pd.Series) -> Optional[OptionAttributes]:
         """Extract option attributes from row."""
         option_type = cls._parse_string(cls._get_value(row, 'DerivInstrmAttrbts_OptnTp'))
-        strike_price = cls._parse_float(cls._get_value(row, 'DerivInstrmAttrbts_StrkPric'))
-        option_style = cls._parse_string(
-            cls._get_value(row, 'DerivInstrmAttrbts_OptnStyle', 'DerivInstrmAttrbts_OptnExrcStyle')
+        option_style = cls._parse_string(cls._get_value(row, 'DerivInstrmAttrbts_OptnExrcStyle'))
+        strike_amount = cls._parse_float(
+            cls._get_value(row, 'DerivInstrmAttrbts_StrkPric_Pric_MntryVal_Amt')
         )
-        
-        # Only create if we have option data
-        if option_type or strike_price or option_style:
+        strike_pct = cls._parse_float(
+            cls._get_value(row, 'DerivInstrmAttrbts_StrkPric_Pric_Pctg')
+        )
+        strike_bps = cls._parse_float(
+            cls._get_value(row, 'DerivInstrmAttrbts_StrkPric_Pric_BsisPts')
+        )
+
+        if option_type or option_style or strike_amount is not None or strike_pct is not None:
             return OptionAttributes(
                 option_type=option_type,
-                strike_price=strike_price,
-                strike_price_currency=cls._parse_string(cls._get_value(row, 'DerivInstrmAttrbts_StrkPricCcy')),
                 option_style=option_style,
-                option_exercise_date=cls._parse_date(cls._get_value(row, 'DerivInstrmAttrbts_OptnExrcDt')),
+                strike_price_amount=strike_amount,
+                strike_price_sign=cls._parse_string(
+                    cls._get_value(row, 'DerivInstrmAttrbts_StrkPric_Pric_MntryVal_Sgn')
+                ),
+                strike_price_percentage=strike_pct,
+                strike_price_basis_points=strike_bps,
+                no_price_condition=cls._parse_string(
+                    cls._get_value(row, 'DerivInstrmAttrbts_StrkPric_NoPric_Pdg')
+                ),
+                no_price_currency=cls._parse_string(
+                    cls._get_value(row, 'DerivInstrmAttrbts_StrkPric_NoPric_Ccy')
+                ),
             )
-        
+
         return None
-    
+
     @classmethod
     def _extract_future_attrs(cls, row: pd.Series) -> Optional[FutureAttributes]:
         """Extract future attributes from row."""
         delivery_type = cls._parse_string(cls._get_value(row, 'DerivInstrmAttrbts_DlvryTp'))
         futures_value_date = cls._parse_date(cls._get_value(row, 'DerivInstrmAttrbts_ValDtOfTheFutr'))
-        
-        # Only create if we have future data
+
         if delivery_type or futures_value_date:
             return FutureAttributes(
                 delivery_type=delivery_type,
                 futures_value_date=futures_value_date,
                 exchange_to_traded_for=cls._parse_string(cls._get_value(row, 'DerivInstrmAttrbts_XchgToTradgFr')),
             )
-        
+
         return None
+
+    @classmethod
+    def _extract_commodity_product(cls, row: pd.Series) -> tuple:
+        """Scan row for commodity base/sub/further-sub product fields.
+
+        ESMA encodes commodity products under asset-class-specific column names
+        (e.g. AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_BasePdct). This method
+        scans the row index for any column matching the pattern and returns the
+        first non-null triple found.
+
+        Returns:
+            Tuple of (base_product, sub_product, further_sub_product).
+        """
+        base = sub = further = None
+        prefix = 'DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_'
+        for col in row.index:
+            normalized = cls._normalize_column_name(col)
+            if not normalized.startswith(prefix):
+                continue
+            rest = normalized[len(prefix):]
+            parts = rest.split('_')
+            if parts[-1] == 'BasePdct' and base is None:
+                base = cls._parse_string(row[col])
+            elif parts[-1] == 'SubPdct' and sub is None:
+                sub = cls._parse_string(row[col])
+            elif parts[-1] == 'AddtlSubPdct' and further is None:
+                further = cls._parse_string(row[col])
+        return base, sub, further
     
     @classmethod
     def _extract_derivative_fields(cls, row: pd.Series) -> Dict[str, Any]:
         """Extract derivative-specific fields from row."""
         fields = {}
-        
+
         for raw_field, model_field in cls.DERIVATIVE_FIELD_MAP.items():
-            # Skip nested option/future attributes
+            # Option/future nested attrs are handled separately
             if model_field.startswith('option_attrs.') or model_field.startswith('future_attrs.'):
                 continue
-            
+
             value = cls._get_value(row, raw_field)
             if value is None:
                 continue
-            
-            # Handle type conversion
-            if 'date' in model_field.lower() or 'dt' in raw_field.lower():
+
+            if 'date' in model_field.lower() or raw_field.lower().endswith('dt'):
                 fields[model_field] = cls._parse_date(value)
-            elif 'multiplier' in model_field.lower() or 'pric' in raw_field.lower():
+            elif model_field in ('price_multiplier',) or 'term_val' in raw_field.lower():
                 fields[model_field] = cls._parse_float(value)
-            elif 'term_val' in raw_field.lower():
-                fields[model_field] = cls._parse_int(value)
             else:
                 fields[model_field] = cls._parse_string(value)
-        
+
+        # Commodity product fields: scan row for all asset-class-specific product columns
+        base, sub, further = cls._extract_commodity_product(row)
+        if base is not None:
+            fields['base_product'] = base
+        if sub is not None:
+            fields['sub_product'] = sub
+        if further is not None:
+            fields['further_sub_product'] = further
+
         # Extract nested attributes
         fields['option_attrs'] = cls._extract_option_attrs(row)
         fields['future_attrs'] = cls._extract_future_attrs(row)
-        
+
         return fields
     
     @classmethod

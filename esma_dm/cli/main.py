@@ -9,6 +9,7 @@ from .firds import firds_cli
 from .fitrs import fitrs_cli
 from .dvcap import dvcap_cli
 from .benchmarks import benchmarks_cli
+from .schema import schema_cli
 
 console = Console()
 
@@ -29,6 +30,7 @@ cli.add_command(firds_cli)
 cli.add_command(fitrs_cli)
 cli.add_command(dvcap_cli)
 cli.add_command(benchmarks_cli)
+cli.add_command(schema_cli)
 
 
 @cli.command()
