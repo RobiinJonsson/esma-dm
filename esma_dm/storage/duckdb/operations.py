@@ -265,6 +265,14 @@ class DuckDBOperations:
                        admission_approval_date, request_for_admission_date, issuer_request,
                        source_file, indexed_at
                 FROM listings_df
+                ON CONFLICT (isin, trading_venue_id) DO UPDATE SET
+                    first_trade_date = EXCLUDED.first_trade_date,
+                    termination_date = EXCLUDED.termination_date,
+                    admission_approval_date = EXCLUDED.admission_approval_date,
+                    request_for_admission_date = EXCLUDED.request_for_admission_date,
+                    issuer_request = EXCLUDED.issuer_request,
+                    source_file = EXCLUDED.source_file,
+                    indexed_at = EXCLUDED.indexed_at
             """
             
             result = self.con.execute(insert_query)
@@ -357,9 +365,16 @@ class DuckDBOperations:
                         inserter.insert_civs(asset_df)
                     elif asset_type == 'I':  # Spot Commodities
                         inserter.insert_spots(asset_df)
-                    elif asset_type == 'H':  # Non-standard/Others
-                        self.logger.warning(f"Non-standard asset type H found, skipping {len(asset_df)} instruments")
-                        continue
+                    elif asset_type == 'H':  # Non-standard (warrants, OTC options, swaptions)
+                        inserter.insert_non_standards(asset_df)
+                    elif asset_type == 'K':  # Strategy (multi-leg combinations)
+                        inserter.insert_strategies(asset_df)
+                    elif asset_type == 'L':  # Financing (repos, SFTs)
+                        inserter.insert_financings(asset_df)
+                    elif asset_type == 'M':  # Other / miscellaneous
+                        inserter.insert_others(asset_df)
+                    elif asset_type == 'T':  # Referential (currencies, benchmarks)
+                        inserter.insert_referentials(asset_df)
                     else:
                         self.logger.warning(f"Unknown asset type: {asset_type}, skipping")
                         continue

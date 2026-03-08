@@ -4,7 +4,7 @@ from pathlib import Path
 import json
 
 # Connect to database
-db_path = Path('esma_dm/config/storage/duckdb/database/firds_current.duckdb')
+db_path = Path('esma_dm/storage/duckdb/database/firds_current.duckdb')
 if not db_path.exists():
     print(f"Database not found at {db_path}")
     exit(1)

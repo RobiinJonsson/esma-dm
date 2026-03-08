@@ -117,50 +117,61 @@ def create_non_equity_transparency_details_table(con) -> None:
 def create_subclass_transparency_table(con) -> None:
     """
     Create table for non-equity sub-class level transparency results.
-    
+
     Stores FULNCR_NYAR (yearly) and FULNCR_SISC (SI historical) files.
     Per ESMA65-8-5240 section 2.3, paragraphs 8-10.
     """
+    con.execute("CREATE SEQUENCE IF NOT EXISTS seq_subclass_transparency_id START 1")
+
     con.execute("""
         CREATE TABLE IF NOT EXISTS subclass_transparency (
-            id INTEGER PRIMARY KEY,
-            
+            id INTEGER PRIMARY KEY DEFAULT nextval('seq_subclass_transparency_id'),
+            tech_record_id INTEGER,
+
             -- Asset/Sub-asset Class Identification
             asset_class TEXT,
             sub_asset_class_code TEXT,
             sub_asset_class_description TEXT,
-            
+
             -- Segmentation Criteria (30+ possible criteria, stored as JSON)
             segmentation_criteria JSON,
-            
+
             -- Calculation Type
             calculation_type TEXT,
             methodology TEXT,
-            
+
             -- Reporting Period
             reporting_period_from DATE,
             reporting_period_to DATE,
-            
+
+            -- Application Period
+            application_period_from DATE,
+            application_period_to DATE,
+
             -- Liquidity (for NYAR yearly calculations only)
             liquid_market BOOLEAN,
-            
+
+            -- Transaction Metrics (for SISC SI calculations)
+            total_number_transactions DOUBLE,
+            total_volume_transactions DOUBLE,
+
+            -- Average Daily Turnover (for NYAR yearly calculations)
+            average_daily_turnover DOUBLE,
+
             -- Thresholds (for NYAR yearly calculations)
             pre_trade_lis_threshold DOUBLE,
             post_trade_lis_threshold DOUBLE,
             pre_trade_ssti_threshold DOUBLE,
             post_trade_ssti_threshold DOUBLE,
-            
-            -- Transaction Metrics (for SISC SI calculations)
-            total_number_transactions DOUBLE,
-            total_volume_transactions DOUBLE,
-            
+
             -- File tracking
             file_name TEXT,
+            file_type TEXT,
             file_date DATE,
             processed_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    
+
     con.execute("CREATE INDEX IF NOT EXISTS idx_subclass_asset ON subclass_transparency(asset_class)")
     con.execute("CREATE INDEX IF NOT EXISTS idx_subclass_code ON subclass_transparency(sub_asset_class_code)")
     con.execute("CREATE INDEX IF NOT EXISTS idx_subclass_calc_type ON subclass_transparency(calculation_type)")
@@ -171,9 +182,11 @@ def create_transparency_metadata_table(con) -> None:
     """
     Create metadata table for tracking FITRS file processing.
     """
+    con.execute("CREATE SEQUENCE IF NOT EXISTS seq_transparency_metadata_id START 1")
+
     con.execute("""
         CREATE TABLE IF NOT EXISTS transparency_metadata (
-            id INTEGER PRIMARY KEY,
+            id INTEGER PRIMARY KEY DEFAULT nextval('seq_transparency_metadata_id'),
             file_name TEXT NOT NULL,
             file_type TEXT,
             instrument_type TEXT,
@@ -238,16 +251,16 @@ def get_fitrs_schema_info() -> dict:
                 'average_daily_turnover',
                 'pre_trade_lis_threshold', 'post_trade_lis_threshold',
                 'pre_trade_ssti_threshold', 'post_trade_ssti_threshold',
-                'file_type', 'file_date', 'processed_date'
+                'file_name', 'file_type', 'file_date', 'processed_date'
             ]
         },
         'equity_transparency': {
-            'description': 'Equity ISIN references',
-            'columns': ['isin']
+            'description': 'Equity ISIN references (reserved for FULECR-specific extensions)',
+            'columns': ['isin', 'attributes']
         },
         'non_equity_transparency': {
-            'description': 'Non-equity ISIN references',
-            'columns': ['isin']
+            'description': 'Non-equity ISIN references (reserved for FULNCR-specific extensions)',
+            'columns': ['isin', 'attributes']
         },
         'transparency_metadata': {
             'description': 'FITRS file processing metadata',

@@ -91,7 +91,7 @@ class FIRDSClient:
             cache_dir.mkdir(parents=True, exist_ok=True)
             
             # Get proper database path from config
-            db_path = self.db_path or str(self.config.get_database_path('firds', self.mode))
+            db_path = self.db_path or str(self.config.get_database_path(self.mode))
             
             self._data_store = DuckDBStorage(cache_dir, db_path=db_path, mode=self.mode)
         

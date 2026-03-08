@@ -391,8 +391,140 @@ class BulkInserter:
                     publication_date = EXCLUDED.publication_date
             """)
     
+    def insert_non_standards(self, df: pd.DataFrame):
+        """Bulk insert non-standard derivative instruments (H*) into non_standard_instruments."""
+        def _get(col):
+            return df[col] if col in df.columns else pd.Series([None] * len(df))
+
+        nsd_df = pd.DataFrame({
+            'isin': _get('isin'),
+            'short_name': _get('short_name'),
+            'expiry_date': _get('expiry_date'),
+            'price_multiplier': _get('price_multiplier'),
+            'underlying_isin': _get('underlying_isin'),
+            'underlying_index_isin': _get('underlying_index_isin'),
+            'underlying_index_name': _get('underlying_index_name'),
+            'underlying_basket_isin': _get('underlying_basket_isin'),
+            'option_type': _get('option_type'),
+            'option_exercise_style': _get('option_exercise_style'),
+            'strike_price': _get('strike_price'),
+            'strike_price_percentage': _get('strike_price_percentage'),
+            'strike_price_basis_points': _get('strike_price_basis_points'),
+            'delivery_type': _get('delivery_type'),
+            'interest_rate_reference_name': _get('interest_rate_reference_name'),
+            'commodity_base_product': _get('commodity_base_product'),
+            'commodity_sub_product': _get('commodity_sub_product'),
+            'commodity_additional_sub_product': _get('commodity_additional_sub_product'),
+            'fx_type': _get('fx_type'),
+            'fx_other_notional_currency': _get('fx_other_notional_currency'),
+            'competent_authority': _get('competent_authority'),
+            'publication_date': _get('publication_date'),
+            'version_number': pd.Series([1] * len(df)),
+        }).dropna(subset=['isin'])
+
+        if len(nsd_df) > 0:
+            self.con.register('nsd_df', nsd_df)
+            self.con.execute("""
+                INSERT INTO non_standard_instruments
+                SELECT * FROM nsd_df
+                ON CONFLICT (isin) DO UPDATE SET
+                    short_name = EXCLUDED.short_name,
+                    expiry_date = EXCLUDED.expiry_date,
+                    price_multiplier = EXCLUDED.price_multiplier,
+                    underlying_isin = EXCLUDED.underlying_isin,
+                    underlying_index_isin = EXCLUDED.underlying_index_isin,
+                    underlying_index_name = EXCLUDED.underlying_index_name,
+                    underlying_basket_isin = EXCLUDED.underlying_basket_isin,
+                    option_type = EXCLUDED.option_type,
+                    option_exercise_style = EXCLUDED.option_exercise_style,
+                    strike_price = EXCLUDED.strike_price,
+                    strike_price_percentage = EXCLUDED.strike_price_percentage,
+                    strike_price_basis_points = EXCLUDED.strike_price_basis_points,
+                    delivery_type = EXCLUDED.delivery_type,
+                    interest_rate_reference_name = EXCLUDED.interest_rate_reference_name,
+                    commodity_base_product = EXCLUDED.commodity_base_product,
+                    commodity_sub_product = EXCLUDED.commodity_sub_product,
+                    commodity_additional_sub_product = EXCLUDED.commodity_additional_sub_product,
+                    fx_type = EXCLUDED.fx_type,
+                    fx_other_notional_currency = EXCLUDED.fx_other_notional_currency,
+                    competent_authority = EXCLUDED.competent_authority,
+                    publication_date = EXCLUDED.publication_date
+            """)
+
+    def insert_strategies(self, df: pd.DataFrame):
+        """Bulk insert strategy instruments (K*) into strategy_instruments."""
+        def _get(col):
+            return df[col] if col in df.columns else pd.Series([None] * len(df))
+
+        strat_df = pd.DataFrame({
+            'isin': _get('isin'),
+            'short_name': _get('short_name'),
+            'expiry_date': _get('expiry_date'),
+            'price_multiplier': _get('price_multiplier'),
+            'underlying_isin': _get('underlying_isin'),
+            'underlying_index_name': _get('underlying_index_name'),
+            'underlying_basket_isin': _get('underlying_basket_isin'),
+            'delivery_type': _get('delivery_type'),
+            'competent_authority': _get('competent_authority'),
+            'publication_date': _get('publication_date'),
+            'version_number': pd.Series([1] * len(df)),
+        }).dropna(subset=['isin'])
+
+        if len(strat_df) > 0:
+            self.con.register('strat_df', strat_df)
+            self.con.execute("""
+                INSERT INTO strategy_instruments
+                SELECT * FROM strat_df
+                ON CONFLICT (isin) DO UPDATE SET
+                    short_name = EXCLUDED.short_name,
+                    expiry_date = EXCLUDED.expiry_date,
+                    price_multiplier = EXCLUDED.price_multiplier,
+                    underlying_isin = EXCLUDED.underlying_isin,
+                    underlying_index_name = EXCLUDED.underlying_index_name,
+                    underlying_basket_isin = EXCLUDED.underlying_basket_isin,
+                    delivery_type = EXCLUDED.delivery_type,
+                    competent_authority = EXCLUDED.competent_authority,
+                    publication_date = EXCLUDED.publication_date
+            """)
+
+    def _insert_minimal(self, df: pd.DataFrame, table: str, temp_name: str):
+        """Insert into a table with schema (isin, short_name, competent_authority, publication_date, version_number)."""
+        def _get(col):
+            return df[col] if col in df.columns else pd.Series([None] * len(df))
+
+        mini_df = pd.DataFrame({
+            'isin': _get('isin'),
+            'short_name': _get('short_name'),
+            'competent_authority': _get('competent_authority'),
+            'publication_date': _get('publication_date'),
+            'version_number': pd.Series([1] * len(df)),
+        }).dropna(subset=['isin'])
+
+        if len(mini_df) > 0:
+            self.con.register(temp_name, mini_df)
+            self.con.execute(f"""
+                INSERT INTO {table}
+                SELECT * FROM {temp_name}
+                ON CONFLICT (isin) DO UPDATE SET
+                    short_name = EXCLUDED.short_name,
+                    competent_authority = EXCLUDED.competent_authority,
+                    publication_date = EXCLUDED.publication_date
+            """)
+
+    def insert_financings(self, df: pd.DataFrame):
+        """Bulk insert financing instruments (L*) into financing_instruments."""
+        self._insert_minimal(df, 'financing_instruments', 'financing_df')
+
+    def insert_others(self, df: pd.DataFrame):
+        """Bulk insert other/miscellaneous instruments (M*) into other_instruments."""
+        self._insert_minimal(df, 'other_instruments', 'other_df')
+
+    def insert_referentials(self, df: pd.DataFrame):
+        """Bulk insert referential instruments (T*) into referential_instruments."""
+        self._insert_minimal(df, 'referential_instruments', 'referential_df')
+
     def insert_spots(self, df: pd.DataFrame):
-        """Bulk insert spot instruments (I/R). Expects DataFrame with data model column names."""
+        """Bulk insert spot instruments (I). Expects DataFrame with data model column names."""
         spot_df = pd.DataFrame({
             'isin': df['isin'] if 'isin' in df.columns else pd.Series([None] * len(df)),
             'short_name': df['short_name'] if 'short_name' in df.columns else pd.Series([None] * len(df)),

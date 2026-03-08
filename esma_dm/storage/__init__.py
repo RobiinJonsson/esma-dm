@@ -3,7 +3,7 @@ Storage backend implementations for ESMA data.
 """
 
 from .base import StorageBackend
-from .duckdb_store import DuckDBStorage
+from .duckdb import DuckDBStorage
 from .fitrs import FITRSStorage
 from .schema import initialize_schema
 from .bulk import BulkInserter

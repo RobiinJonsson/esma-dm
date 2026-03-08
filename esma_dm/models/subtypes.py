@@ -523,7 +523,4 @@ def parse_instrument(row: Dict[str, Any]):
     if model_class:
         return model_class.from_dict(row)
     
-    # Fall back to base model
-    from .mapper import CFIMapper
-    base_class = CFIMapper.get_model_class(cfi_code)
-    return base_class(**{k: v for k, v in row.items() if k != 'attributes'})
+    

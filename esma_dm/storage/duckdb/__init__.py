@@ -34,17 +34,21 @@ class DuckDBStorage(StorageBackend):
         
         # Initialize connection manager with database path
         self.connection = DuckDBConnection(db_path, mode)
-        
+
+        # Open connection and create all tables (idempotent — CREATE IF NOT EXISTS)
+        self.connection.initialize(mode)
+
         # Initialize modular components
         self.operations = DuckDBOperations(self.connection)
         self.queries = DuckDBQueries(self.connection)
-        
+
         # Only initialize versioning for history mode
         self.versioning = DuckDBVersioning(self.connection) if mode == 'history' else None
     
     @property
     def con(self):
         """Get database connection."""
+        self.connection._ensure_connection()
         return self.connection.con
     
     @property

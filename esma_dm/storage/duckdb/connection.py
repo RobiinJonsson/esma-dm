@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 import duckdb
 
 from ..base import StorageBackend
-from ..schema import initialize_schema
+from ..schema import initialize_schema, initialize_fitrs_schema
 from esma_dm.config import get_database_config
 from esma_dm import config as global_config
 
@@ -52,8 +52,9 @@ class DuckDBConnection:
         self.logger.info(f"Initializing DuckDB storage in {mode} mode at {self.db_path}")
         
         try:
-            # Initialize schema based on mode
+            # Initialize FIRDS and FITRS schemas together in the unified database
             initialize_schema(self.con)
+            initialize_fitrs_schema(self.con)
             result = {"status": "initialized", "mode": mode}
             
             duration = time.time() - start_time

@@ -14,7 +14,8 @@ class TransparencyAPI:
         Initialize Transparency API.
         
         Args:
-            db_path: Path to FITRS database (defaults to downloads/data/fitrs/fitrs.db)
+            db_path: Override path to the unified DuckDB file. Defaults to the path
+            resolved by Config (esma_dm/storage/duckdb/database/esma_current.duckdb).
         """
         self.client = FITRSClient(db_path=db_path)
     
@@ -160,7 +161,8 @@ class TransparencyAPI:
         Attach FIRDS database for cross-database queries.
         
         Args:
-            firds_db_path: Path to FIRDS database (defaults to storage/duckdb/database/firds_current.duckdb)
+            firds_db_path: Deprecated. FIRDS and FITRS tables now share the same
+                unified database — no attach required. This parameter is ignored.
             
         Example:
             >>> edm = ESMADataManager()

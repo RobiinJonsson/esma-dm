@@ -11,21 +11,21 @@ def test_mode_initialization():
     print("Testing Mode Initialization")
     print("=" * 60)
     
-    # Test 1: Current mode creates firds_current.duckdb
+    # Test 1: Current mode creates esma_current.duckdb
     print("\n1. Testing 'current' mode...")
     firds_current = FIRDSClient(mode='current')
     db_path_current = Path(firds_current.data_store.db_path)
     print(f"   Database path: {db_path_current}")
-    assert 'firds_current.duckdb' in str(db_path_current), "Current mode should use firds_current.duckdb"
-    print("   ✓ Correct database name for current mode")
-    
-    # Test 2: History mode creates firds_history.duckdb
+    assert 'esma_current.duckdb' in str(db_path_current), "Current mode should use esma_current.duckdb"
+    print("   Correct database name for current mode")
+
+    # Test 2: History mode creates esma_history.duckdb
     print("\n2. Testing 'history' mode...")
     firds_history = FIRDSClient(mode='history')
     db_path_history = Path(firds_history.data_store.db_path)
     print(f"   Database path: {db_path_history}")
-    assert 'firds_history.duckdb' in str(db_path_history), "History mode should use firds_history.duckdb"
-    print("   ✓ Correct database name for history mode")
+    assert 'esma_history.duckdb' in str(db_path_history), "History mode should use esma_history.duckdb"
+    print("   Correct database name for history mode")
     
     # Test 3: Databases are separate files
     print("\n3. Verifying database separation...")

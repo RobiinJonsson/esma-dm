@@ -6,15 +6,16 @@ module to decode and classify instruments according to ISO 10962 standard.
 """
 
 from pathlib import Path
-from esma_dm.storage.duckdb_store import DuckDBStorage
+from esma_dm.storage import DuckDBStorage
 from esma_dm.models.utils import CFI, Category
+from esma_dm.config import Config
 
 def demonstrate_cfi_classification():
     """Demonstrate CFI classification features."""
-    
+
     # Initialize storage
     cache_dir = Path('downloads')
-    db_path = str(cache_dir / 'data' / 'firds' / 'firds_complete.db')
+    db_path = str(Config().get_database_path('current'))
     storage = DuckDBStorage(cache_dir, db_path)
     
     # Check if database has data

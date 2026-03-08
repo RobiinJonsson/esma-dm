@@ -38,8 +38,8 @@ def _get_downloads_dir() -> Path:
 
 def _get_database_dir() -> Path:
     """Get the database directory within the package storage."""
-    # Use storage/duckdb/database directory within the package
-    package_dir = Path(__file__).parent  # esma_dm/
+    # Path(__file__) is esma_dm/config/base.py — go up two levels to reach esma_dm/
+    package_dir = Path(__file__).parent.parent  # esma_dm/
     db_dir = package_dir / "storage" / "duckdb" / "database"
     db_dir.mkdir(parents=True, exist_ok=True)
     return db_dir
@@ -112,28 +112,29 @@ class Config:
         if not self.temp_dir.exists():
             self.temp_dir.mkdir(parents=True, exist_ok=True)
     
-    def get_database_path(self, data_type: str = 'firds', mode: Optional[str] = None) -> Path:
+    def get_database_path(self, mode: Optional[str] = None) -> Path:
         """
-        Get the database file path for a specific data type and mode.
-        
+        Get the unified database file path for the given mode.
+
+        Both FIRDS and FITRS data are stored in the same database file.
+        The file is named after the mode so current and history data
+        remain in separate files.
+
         Args:
-            data_type: Type of data ('firds', 'fitrs', etc.)
             mode: Database mode ('current' or 'history'), defaults to config mode
-        
+
         Returns:
             Path to database file
-        
+
         Example:
             >>> config = Config()
-            >>> config.get_database_path('firds', 'current')
-            PosixPath('.../storage/duckdb/database/firds_current.duckdb')
+            >>> config.get_database_path('current')
+            PosixPath('.../storage/duckdb/database/esma_current.duckdb')
         """
         mode = mode or self.mode
         if mode not in DATABASE_MODES.values():
             raise ValueError(f"Invalid mode '{mode}'. Must be one of: {list(DATABASE_MODES.values())}")
-        
-        db_name = f"{data_type}_{mode}.duckdb" if data_type == 'firds' else f"{data_type}.db"
-        return self.database_path / db_name
+        return self.database_path / f"esma_{mode}.duckdb"
     
     @classmethod
     def from_env(cls) -> "Config":

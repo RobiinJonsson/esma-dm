@@ -68,7 +68,8 @@ def create_listings_table(con):
             issuer_request VARCHAR,
             source_file VARCHAR,
             indexed_at TIMESTAMP,
-            FOREIGN KEY (isin) REFERENCES instruments(isin)
+            FOREIGN KEY (isin) REFERENCES instruments(isin),
+            UNIQUE (isin, trading_venue_id)
         )
     """)
 
@@ -257,6 +258,123 @@ def create_spot_table(con):
     """)
 
 
+def create_non_standard_table(con):
+    """Create non-standard derivative instruments table (H*).
+
+    Covers covered warrants, turbo warrants, OTC options, swaptions, and
+    other derivatives not classified as listed futures or listed options.
+    Mirrors the forward table structure with the addition of an interest
+    rate reference field used for swaptions.
+    """
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS non_standard_instruments (
+            isin VARCHAR PRIMARY KEY,
+            short_name VARCHAR,
+            expiry_date DATE,
+            price_multiplier DOUBLE,
+            underlying_isin VARCHAR,
+            underlying_index_isin VARCHAR,
+            underlying_index_name VARCHAR,
+            underlying_basket_isin VARCHAR,
+            option_type VARCHAR,
+            option_exercise_style VARCHAR,
+            strike_price DOUBLE,
+            strike_price_percentage DOUBLE,
+            strike_price_basis_points DOUBLE,
+            delivery_type VARCHAR,
+            interest_rate_reference_name VARCHAR,
+            commodity_base_product VARCHAR,
+            commodity_sub_product VARCHAR,
+            commodity_additional_sub_product VARCHAR,
+            fx_type VARCHAR,
+            fx_other_notional_currency VARCHAR,
+            competent_authority VARCHAR,
+            publication_date DATE,
+            version_number INTEGER DEFAULT 1,
+            FOREIGN KEY (isin) REFERENCES instruments(isin)
+        )
+    """)
+
+
+def create_strategy_table(con):
+    """Create multi-leg strategy instruments table (K*).
+
+    Covers straddles, strangles, butterflies, spreads, and other combination
+    derivative strategies represented as a single FIRDS instrument.
+    """
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS strategy_instruments (
+            isin VARCHAR PRIMARY KEY,
+            short_name VARCHAR,
+            expiry_date DATE,
+            price_multiplier DOUBLE,
+            underlying_isin VARCHAR,
+            underlying_index_name VARCHAR,
+            underlying_basket_isin VARCHAR,
+            delivery_type VARCHAR,
+            competent_authority VARCHAR,
+            publication_date DATE,
+            version_number INTEGER DEFAULT 1,
+            FOREIGN KEY (isin) REFERENCES instruments(isin)
+        )
+    """)
+
+
+def create_financing_table(con):
+    """Create financing instruments table (L*).
+
+    Covers repos, reverse repos, securities lending, buy-sell-back agreements,
+    and other collateralised financing products.
+    """
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS financing_instruments (
+            isin VARCHAR PRIMARY KEY,
+            short_name VARCHAR,
+            competent_authority VARCHAR,
+            publication_date DATE,
+            version_number INTEGER DEFAULT 1,
+            FOREIGN KEY (isin) REFERENCES instruments(isin)
+        )
+    """)
+
+
+def create_other_table(con):
+    """Create other/miscellaneous instruments table (M*).
+
+    Catch-all for instruments that do not fit any of the 13 defined CFI
+    categories, including hybrid instruments and complex structured products.
+    """
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS other_instruments (
+            isin VARCHAR PRIMARY KEY,
+            short_name VARCHAR,
+            competent_authority VARCHAR,
+            publication_date DATE,
+            version_number INTEGER DEFAULT 1,
+            FOREIGN KEY (isin) REFERENCES instruments(isin)
+        )
+    """)
+
+
+def create_referential_table(con):
+    """Create referential instruments table (T*).
+
+    Covers currencies, interest rate benchmarks, commodity indices, and other
+    reference entities that appear in FIRDS as underlyings rather than as
+    directly tradeable securities.
+    """
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS referential_instruments (
+            isin VARCHAR PRIMARY KEY,
+            short_name VARCHAR,
+            competent_authority VARCHAR,
+            publication_date DATE,
+            version_number INTEGER DEFAULT 1,
+            FOREIGN KEY (isin) REFERENCES instruments(isin)
+        )
+    """)
+
+
 def create_metadata_table(con):
     """Create metadata table for file tracking."""
     con.execute("""
@@ -340,15 +458,22 @@ def initialize_schema(con):
     """Initialize complete database schema with historical tracking."""
     create_master_table(con)
     create_listings_table(con)
-    create_equity_table(con)
-    create_debt_table(con)
-    create_futures_table(con)
-    create_option_table(con)
-    create_swap_table(con)
-    create_forward_table(con)
-    create_rights_table(con)
-    create_civ_table(con)
-    create_spot_table(con)
+    # CFI category detail tables (one per ISO 10962 first character)
+    create_equity_table(con)          # E
+    create_debt_table(con)            # D
+    create_futures_table(con)         # F
+    create_option_table(con)          # O
+    create_swap_table(con)            # S
+    create_forward_table(con)         # J
+    create_rights_table(con)          # R
+    create_civ_table(con)             # C
+    create_spot_table(con)            # I
+    create_non_standard_table(con)    # H
+    create_strategy_table(con)        # K
+    create_financing_table(con)       # L
+    create_other_table(con)           # M
+    create_referential_table(con)     # T
+    # Supporting tables
     create_metadata_table(con)
     create_cancellations_table(con)
     create_instrument_history_table(con)
