@@ -13,6 +13,7 @@ A comprehensive Python package for accessing ESMA (European Securities and Marke
 - **Instrument Lookup**: `esma-dm firds reference <ISIN>` — master fields, CFI classification, and typed detail columns
 - **Instrument Search**: `esma-dm firds search <query>` — search by name or ISIN prefix with asset-type filter
 - **Database CLI**: `esma-dm db stats|reinit|drop` — inspect, reset, and manage the local DuckDB database
+- **Transparency Loading**: `esma-dm fitrs index` — load 10M+ transparency records from local FITRS cache into the unified database
 - **Complete Field Coverage**: Full name, short name, and all ESMA reference data fields
 - **High Performance**: Vectorized bulk loading at 33,000+ instruments/second
 - **DuckDB Storage**: Fast analytical queries on star schema with 12 normalized tables
@@ -297,6 +298,43 @@ esma-dm db drop --yes
 - FITRS transparency table row counts
 
 `db reinit` is the correct command after a corrupted or duplicate-insert run. It drops the database file and calls schema initialization before prompting to re-index from cache.
+
+### Transparency Data (FITRS)
+
+Download and index ESMA FITRS transparency results into the unified database.
+
+```bash
+# List available transparency files from ESMA register
+esma-dm fitrs list
+esma-dm fitrs list --type FULECR
+esma-dm fitrs list --type FULNCR --instrument non-equity
+
+# Download latest full files to local cache (~1.8 GB for all asset types)
+esma-dm fitrs download
+
+# List cached transparency files with sizes
+esma-dm fitrs cache
+
+# Load all cached CSV files into the transparency tables
+esma-dm fitrs index
+
+# Load only equity (FULECR) or non-equity (FULNCR) results
+esma-dm fitrs index --type FULECR
+esma-dm fitrs index --type FULNCR
+
+# Reinit DB schema and immediately load FITRS cache in one step
+esma-dm db reinit --fitrs
+```
+
+After a full `fitrs index` run the unified database contains:
+
+| Table | Rows | Description |
+|---|---|---|
+| `transparency` | 10.7M | ISIN-level results, both equity and non-equity |
+| `equity_transparency` | 29K | Equity ISIN index (FULECR coverage) |
+| `non_equity_transparency` | 10.7M | Non-equity ISIN index (FULNCR coverage) |
+
+File types supported by `fitrs index`: `FULECR`, `FULNCR`, `DLTECR`, `DLTNCR`.
 
 ## Configuration Management
 

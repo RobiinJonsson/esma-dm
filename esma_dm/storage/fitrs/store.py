@@ -1,8 +1,9 @@
 """
 DuckDB storage backend for FITRS transparency data.
 
-Manages a separate fitrs.db database that can be attached to firds.db
-for cross-database queries.
+FITRS tables (transparency, subclass_transparency, etc.) live in the same
+unified database as FIRDS tables (esma_current.duckdb). Cross-dataset JOINs
+between FIRDS instruments and FITRS transparency records work natively.
 """
 
 from pathlib import Path
@@ -16,30 +17,44 @@ from ..schema.fitrs_schema import initialize_fitrs_schema, get_fitrs_schema_info
 
 class FITRSStorage:
     """
-    Storage backend for FITRS transparency data using DuckDB.
-    
-    Creates a separate fitrs.db database that can be queried independently
-    or joined with firds.db for combined queries.
+    Storage backend for FITRS transparency data.
+
+    FITRS tables live in the same unified DuckDB database as FIRDS tables.
+    Can be constructed with a shared duckdb.Connection (from DuckDBStorage) to
+    avoid opening a second handle to the same file, or with a db_path to open
+    its own connection (useful when used standalone).
     """
-    
-    def __init__(self, db_path: Optional[str] = None):
+
+    def __init__(
+        self,
+        db_path: Optional[str] = None,
+        connection: Optional[duckdb.DuckDBPyConnection] = None,
+        mode: str = 'current',
+    ):
         """
         Initialize FITRS storage.
-        
+
         Args:
-            db_path: Path to fitrs.db file. Defaults to downloads/fitrs.db
+            db_path: Path to the unified DuckDB file. When None the path is
+                     resolved from Config (esma_dm/storage/duckdb/database/esma_{mode}.duckdb).
+            connection: Existing duckdb.Connection to reuse (takes precedence over db_path).
+            mode: Database mode ('current' or 'history'). Used only when db_path is None.
         """
-        if db_path is None:
-            db_path = str(Path(__file__).parent.parent.parent / 'downloads' / 'fitrs.db')
-        
-        self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        self.con = duckdb.connect(str(self.db_path))
-        self._initialize_schema()
-    
-    def _initialize_schema(self):
-        """Initialize database schema if needed."""
+        if connection is not None:
+            # Share an existing connection — no need to open the file again.
+            self.con = connection
+            self.db_path = Path(connection.database) if hasattr(connection, 'database') else None
+            self._owns_connection = False
+        else:
+            if db_path is None:
+                from esma_dm.config import default_config
+                db_path = str(default_config.get_database_path(mode))
+            self.db_path = Path(db_path)
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            self.con = duckdb.connect(str(self.db_path))
+            self._owns_connection = True
+
+        # Ensure FITRS tables exist (idempotent — CREATE TABLE IF NOT EXISTS).
         initialize_fitrs_schema(self.con)
     
     def initialize(self, mode: str = 'check', verify_only: bool = False) -> Dict[str, Any]:
@@ -143,10 +158,14 @@ class FITRSStorage:
         
         instrument_type = 'equity' if 'ECR' in file_type else 'non_equity'
         
-        # Map FITRS columns to database columns
+        # Map FITRS columns to database columns.
+        # FULECR (equity) uses 'Id' for ISIN; FULNCR (non-equity) uses 'ISIN'.
         column_mapping = {
             'TechRcrdId': 'tech_record_id',
+            # Equity (FULECR / DLTECR)
             'Id': 'isin',
+            # Non-equity (FULNCR / DLTNCR) — ISIN key differs
+            'ISIN': 'isin',
             'FinInstrmClssfctn': 'instrument_classification',
             'FrDt': 'reporting_period_from',
             'ToDt': 'reporting_period_to',
@@ -154,6 +173,7 @@ class FITRSStorage:
             'TtlNbOfTxsExctd': 'total_number_transactions',
             'TtlVolOfTxsExctd': 'total_volume_transactions',
             'Lqdty': 'liquid_market',
+            # Equity transparency metrics (FULECR)
             'AvrgDalyTrnvr': 'average_daily_turnover',
             'AvrgTxVal': 'average_transaction_value',
             'LrgInScale': 'large_in_scale',
@@ -162,14 +182,19 @@ class FITRSStorage:
             'Id_2': 'most_relevant_market_id',
             'AvrgDalyNbOfTxs_3': 'most_relevant_market_avg_daily_trades',
             'Sttstcs': 'statistics',
-            # Application period (from April 2025 files)
+            # Application period
             'ApplFrDt': 'application_period_from',
             'ApplToDt': 'application_period_to',
-            # Non-equity thresholds
+            # Non-equity thresholds — named fields from XML-parsed files
             'PreTradLrgInScaleThrshld': 'pre_trade_lis_threshold',
             'PstTradLrgInScaleThrshld': 'post_trade_lis_threshold',
             'PreTradInstrmSzSpcfcThrshld': 'pre_trade_ssti_threshold',
-            'PstTradInstrmSzSpcfcThrshld': 'post_trade_ssti_threshold'
+            'PstTradInstrmSzSpcfcThrshld': 'post_trade_ssti_threshold',
+            # Flattened non-equity thresholds as they appear in CSV-parsed files
+            # Amt_EUR = pre-trade LIS, Amt_EUR_4 = post-trade LIS, Amt_EUR_2 = pre-trade SSTI
+            'Amt_EUR': 'pre_trade_lis_threshold',
+            'Amt_EUR_4': 'post_trade_lis_threshold',
+            'Amt_EUR_2': 'pre_trade_ssti_threshold',
         }
         
         # Rename columns
@@ -207,9 +232,11 @@ class FITRSStorage:
         # Insert into main transparency table with explicit columns
         self.con.execute(f"INSERT OR REPLACE INTO transparency ({column_list}) SELECT * FROM main_df")
         
-        # Create simple record for type-specific table (just ISIN link)
-        type_df = pd.DataFrame({'isin': df['Id'].unique()})
-        
+        # Create simple record for type-specific table (just ISIN link).
+        # FULECR uses 'Id'; FULNCR uses 'ISIN' — handle both.
+        isin_col = 'Id' if 'Id' in df.columns else 'ISIN'
+        type_df = pd.DataFrame({'isin': df[isin_col].dropna().unique()})
+
         if instrument_type == 'equity':
             self.con.execute("INSERT OR IGNORE INTO equity_transparency (isin) SELECT * FROM type_df")
         elif instrument_type == 'non_equity':
@@ -368,28 +395,14 @@ class FITRSStorage:
         
         return stats
     
-    def attach_firds_database(self, firds_db_path: str) -> None:
-        """
-        Attach FIRDS database for cross-database queries.
-        
-        Args:
-            firds_db_path: Path to firds.db
-            
-        Example:
-            >>> fitrs_store.attach_firds_database('storage/duckdb/database/firds_current.duckdb')
-            >>> # Now can query both databases
-            >>> result = fitrs_store.query(\"\"\"
-            ...     SELECT f.isin, f.full_name, t.liquid_market, t.average_daily_turnover
-            ...     FROM firds.instruments f
-            ...     JOIN transparency t ON f.isin = t.isin
-            ...     WHERE t.liquid_market = 'Y'
-            ... \"\"\")
-        """
-        self.con.execute(f"ATTACH '{firds_db_path}' AS firds")
-    
+    # attach_firds_database is no longer needed — FIRDS and FITRS tables
+    # live in the same unified database. Cross-dataset JOINs work directly.
+    # Example: SELECT i.full_name, t.liquid_market FROM instruments i
+    #          JOIN transparency t ON i.isin = t.isin
+
     def close(self):
-        """Close database connection."""
-        if self.con:
+        """Close database connection (only if this instance owns it)."""
+        if self._owns_connection and self.con:
             self.con.close()
     
     def __enter__(self):

@@ -171,7 +171,9 @@ def show_stats(mode: str, tables: bool):
               help='Database mode (default: current)')
 @click.option('--yes', is_flag=True, default=False,
               help='Skip confirmation prompt')
-def reinit_db(mode: str, yes: bool):
+@click.option('--fitrs', 'load_fitrs', is_flag=True, default=False,
+              help='Also load FITRS transparency data from cache after reinit')
+def reinit_db(mode: str, yes: bool, load_fitrs: bool):
     """
     Drop and reinitialize the database schema.
 
@@ -183,6 +185,8 @@ def reinit_db(mode: str, yes: bool):
         esma-dm db reinit
 
         esma-dm db reinit --mode history --yes
+
+        esma-dm db reinit --fitrs
     """
     try:
         from esma_dm.clients.firds import FIRDSClient
@@ -214,10 +218,43 @@ def reinit_db(mode: str, yes: bool):
         firds2.data_store.connection.initialize(mode=mode)
         console.print("[green]Schema initialized.[/green]")
 
-        # Confirm
         new_size_mb = Path(firds2.data_store.db_path).stat().st_size / 1_048_576
         console.print(f"\n[bold cyan]Done.[/bold cyan] Fresh database at {firds2.data_store.db_path} ({new_size_mb:.1f} MB)")
-        console.print("[dim]Run 'esma-dm firds cache' to see available files, then re-index with FIRDSClient.index_cached_files().[/dim]\n")
+
+        if load_fitrs:
+            console.print("\n[bold cyan]Loading FITRS cache...[/bold cyan]\n")
+            from esma_dm.clients.fitrs import FITRSClient
+            from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+            import re
+
+            cache_dir = config.downloads_path / 'fitrs'
+            pattern = re.compile(r'^(FULECR|DLTECR|FULNCR|DLTNCR)_(\d{8})_')
+            eligible_files = [p for p in sorted(cache_dir.glob('*_data.csv')) if pattern.match(p.name)]
+
+            if not eligible_files:
+                console.print("[yellow]No FITRS cached files found — skipping.[/yellow]")
+            else:
+                fitrs = FITRSClient(mode=mode)
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    TaskProgressColumn(),
+                    console=console,
+                ) as progress:
+                    task = progress.add_task("Indexing FITRS...", total=len(eligible_files))
+
+                    def on_prog(filename, current, total):
+                        progress.update(task, completed=current - 1, description=filename)
+
+                    result = fitrs.index_cached_files(progress_callback=on_prog)
+                    progress.update(task, completed=len(eligible_files), description="Done")
+
+                console.print(f"\n[green]FITRS:[/green] {result['total_records']:,} records from {result['files_processed']} files.")
+        else:
+            console.print(f"[dim]Run 'esma-dm fitrs index' to load transparency data from cache.[/dim]")
+
+        console.print()
 
     except click.Abort:
         console.print("\n[yellow]Aborted.[/yellow]\n")

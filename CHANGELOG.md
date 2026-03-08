@@ -4,6 +4,54 @@ All notable changes to the esma-dm project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.3.7] - 2026-03-08
+
+### Fixed - FITRS `insert_transparency_data` bugs
+
+Three bugs in `esma_dm/storage/fitrs/store.py`:
+
+1. **Missing ISIN for non-equity records.** FULNCR files use the column name `ISIN`
+   for the instrument identifier; FULECR files use `Id`. The column mapping only
+   mapped `Id` → `isin`, so all FULNCR records were stored with a null ISIN and
+   `INSERT OR REPLACE` on the `isin PRIMARY KEY` silently compressed millions of rows
+   into a single null-ISIN slot. Added `'ISIN': 'isin'` to the mapping.
+
+2. **Crash on `df['Id']` for FULNCR.** The type-tracking insert at the end of
+   `insert_transparency_data` referenced `df['Id'].unique()` unconditionally, which
+   raises `KeyError` for non-equity files. Fixed to detect whichever column is present
+   (`Id` or `ISIN`) before building `type_df`.
+
+3. **Missing threshold column mappings for FULNCR.** Non-equity CSV files contain
+   threshold amounts as `Amt_EUR`, `Amt_EUR_4`, `Amt_EUR_2` (flattened from XML).
+   Added mappings: `Amt_EUR` → `pre_trade_lis_threshold`,
+   `Amt_EUR_4` → `post_trade_lis_threshold`, `Amt_EUR_2` → `pre_trade_ssti_threshold`.
+
+### Added - FITRS cache indexing
+
+`FITRSClient.index_cached_files(file_types, progress_callback)` — load all
+`*_data.csv` files from the FITRS cache directory without re-downloading from ESMA.
+Extracts `file_date` from the filename and dispatches to `insert_transparency_data`.
+
+`esma-dm fitrs index [--type FULECR|DLTECR|FULNCR|DLTNCR] [--mode current|history]`
+- Scans the local cache, shows a progress bar per file
+- Prints a per-file summary table (file, type, record count, status)
+- Multiple `--type` flags can be combined
+
+`esma-dm db reinit --fitrs`
+- New `--fitrs` flag: after schema reinit, immediately loads all FITRS cached
+  files (`FULECR`, `DLTECR`, `FULNCR`, `DLTNCR`) via `FITRSClient.index_cached_files`
+- Without the flag, prints a hint to run `esma-dm fitrs index`
+
+### Result after loading
+
+```
+transparency            10,762,869 rows
+non_equity_transparency 10,733,849 rows  (ISINs and thresholds populated)
+equity_transparency         29,020 rows  (ISINs and equity metrics populated)
+```
+
+---
+
 ## [0.3.6] - 2026-03-08
 
 ### Added - Database Management CLI (`esma-dm db`)

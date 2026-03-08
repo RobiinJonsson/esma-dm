@@ -68,31 +68,38 @@ class FITRSClient:
         date_to: Optional[str] = None,
         limit: Optional[int] = None,
         config: Optional[Any] = None,
-        db_path: Optional[str] = None
+        db_path: Optional[str] = None,
+        connection: Optional[Any] = None,
+        mode: str = 'current',
     ):
         """
         Initialize FITRS client.
-        
+
         Args:
             date_from: Start date for filtering files (defaults to 2017-01-01)
             date_to: End date for filtering files (defaults to today)
             limit: Maximum number of records to fetch per request (defaults to 10000)
             config: Optional custom configuration object
-            db_path: Path to fitrs.db database file
+            db_path: Override path to the unified DuckDB file. When None the path
+                is resolved via Config (esma_dm/storage/duckdb/database/esma_{mode}.duckdb).
+            connection: Optional shared duckdb.DuckDBPyConnection. When provided the
+                client does not open or close the connection itself — useful when FIRDS
+                and FITRS share a single database connection.
+            mode: Database mode ('current' or 'history'). Ignored when *connection*
+                is provided.
         """
         self.config = config or default_config
         self.fitrs_config = get_fitrs_config()
-        
+
         # Use centralized defaults
         self.date_from, self.date_to = self.fitrs_config.get_date_range(date_from, date_to)
         self.limit = min(limit or self.fitrs_config.default_limit, self.fitrs_config.max_limit)
-        self.config = config or default_config
-        
+
         self.logger = Utils.set_logger("FITRSClient")
         self._utils = Utils()
-        
-        # Initialize database storage
-        self.data_store = FITRSStorage(db_path)
+
+        # Initialize database storage — shared connection takes priority
+        self.data_store = FITRSStorage(db_path=db_path, connection=connection, mode=mode)
     
     def get_file_list(self) -> pd.DataFrame:
         """
@@ -432,7 +439,100 @@ class FITRSClient:
             'file_type': file_type,
             'is_subclass': is_subclass
         }
-    
+
+    def index_cached_files(
+        self,
+        file_types: Optional[List[str]] = None,
+        progress_callback=None,
+    ) -> Dict[str, Any]:
+        """
+        Index FITRS transparency data from locally cached CSV files.
+
+        Reads all ``*_data.csv`` files in the FITRS cache directory and loads
+        them into the transparency or subclass_transparency tables without
+        re-downloading from ESMA.
+
+        Args:
+            file_types: List of file-type prefixes to include, e.g.
+                ``['FULECR', 'FULNCR']``.  Defaults to all cached types.
+            progress_callback: Optional callable(filename, current, total) invoked
+                before each file is processed.
+
+        Returns:
+            Dict with keys ``files_processed``, ``files_skipped``,
+            ``total_records``, and per-file ``details``.
+
+        Example:
+            >>> fitrs = FITRSClient()
+            >>> result = fitrs.index_cached_files(['FULECR', 'FULNCR'])
+            >>> print(result['total_records'])
+        """
+        import re
+
+        cache_dir = self.config.downloads_path / 'fitrs'
+        csv_files = sorted(cache_dir.glob('*_data.csv'))
+
+        if not csv_files:
+            self.logger.warning(f"No cached CSV files found in {cache_dir}")
+            return {'status': 'no_files', 'files_processed': 0, 'total_records': 0, 'details': []}
+
+        # Supported ISIN-level types
+        isin_types = {'FULECR', 'DLTECR', 'FULNCR', 'DLTNCR'}
+        subclass_types = {'FULNCR_NYAR', 'FULNCR_SISC'}
+        known_types = isin_types | subclass_types
+
+        # Pattern: FULECR_20260221_E_1of2_data.csv
+        pattern = re.compile(r'^(FULECR|DLTECR|FULNCR|DLTNCR)_(\d{8})_')
+
+        total_records = 0
+        files_processed = 0
+        files_skipped = 0
+        details = []
+
+        eligible = []
+        for path in csv_files:
+            m = pattern.match(path.name)
+            if not m:
+                continue
+            ftype, fdate = m.group(1), m.group(2)
+            if file_types and ftype not in file_types:
+                continue
+            eligible.append((path, ftype, fdate))
+
+        for idx, (path, ftype, fdate) in enumerate(eligible):
+            if progress_callback:
+                progress_callback(path.name, idx + 1, len(eligible))
+
+            try:
+                df = pd.read_csv(path, dtype=str)
+                if df.empty:
+                    files_skipped += 1
+                    details.append({'file': path.name, 'status': 'empty', 'records': 0})
+                    continue
+
+                # Attach file date so it lands in the file_date column
+                file_date_str = f"{fdate[:4]}-{fdate[4:6]}-{fdate[6:]}"
+                df['file_date'] = file_date_str
+
+                count = self.data_store.insert_transparency_data(df, ftype)
+                total_records += count
+                files_processed += 1
+                details.append({'file': path.name, 'file_type': ftype, 'status': 'ok', 'records': count})
+                self.logger.info(f"Indexed {count} records from {path.name}")
+
+            except Exception as e:
+                self.logger.error(f"Failed to index {path.name}: {e}")
+                files_skipped += 1
+                details.append({'file': path.name, 'status': 'error', 'error': str(e), 'records': 0})
+
+        return {
+            'status': 'completed',
+            'files_processed': files_processed,
+            'files_skipped': files_skipped,
+            'total_records': total_records,
+            'details': details,
+        }
+
     def transparency(self, isin: str) -> Optional[Dict[str, Any]]:
         """
         Get transparency data for an ISIN from database.

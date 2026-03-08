@@ -478,5 +478,102 @@ def show_head(file_path: str, rows: int, columns: Optional[str]):
         raise click.Abort()
 
 
+@fitrs_cli.command(name='index')
+@click.option('--type', 'file_types', multiple=True,
+              type=click.Choice(['FULECR', 'DLTECR', 'FULNCR', 'DLTNCR'], case_sensitive=False),
+              help='File type(s) to load. Repeat to specify multiple (default: all cached types).')
+@click.option('--mode', default='current', type=click.Choice(['current', 'history'], case_sensitive=False),
+              help='Database mode (default: current)')
+def index_from_cache(file_types, mode: str):
+    """
+    Load FITRS transparency data from locally cached CSV files.
+
+    Reads all *_data.csv files in the FITRS cache and inserts them into
+    the transparency tables without re-downloading from ESMA.
+
+    Examples:
+
+        esma-dm fitrs index
+
+        esma-dm fitrs index --type FULECR --type FULNCR
+
+        esma-dm fitrs index --type FULECR
+    """
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+
+    try:
+        from esma_dm.clients.fitrs import FITRSClient
+
+        types_filter = list(file_types) if file_types else None
+        label = ', '.join(types_filter) if types_filter else 'all types'
+        console.print(f"\n[bold cyan]Indexing FITRS cache[/bold cyan]  ({label})\n")
+
+        fitrs = FITRSClient(mode=mode)
+
+        # Pre-scan to know the file count for the progress bar
+        import re
+        from esma_dm.config import Config
+        cache_dir = Config(mode=mode).downloads_path / 'fitrs'
+        pattern = re.compile(r'^(FULECR|DLTECR|FULNCR|DLTNCR)_(\d{8})_')
+        eligible_files = [
+            p for p in sorted(cache_dir.glob('*_data.csv'))
+            if pattern.match(p.name) and (not types_filter or pattern.match(p.name).group(1) in types_filter)
+        ]
+
+        if not eligible_files:
+            console.print("[yellow]No matching cached files found.[/yellow]\n")
+            return
+
+        console.print(f"[dim]Found {len(eligible_files)} file(s) to process.[/dim]\n")
+
+        results = []
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}", justify="left"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task("Indexing...", total=len(eligible_files))
+
+            def on_progress(filename, current, total):
+                progress.update(task, completed=current - 1, description=filename)
+
+            result = fitrs.index_cached_files(
+                file_types=types_filter,
+                progress_callback=on_progress,
+            )
+            progress.update(task, completed=len(eligible_files), description="Done")
+
+        console.print()
+
+        # Summary table
+        summary = Table(title="Indexing Summary", box=box.ROUNDED)
+        summary.add_column("File", style="cyan")
+        summary.add_column("Type", style="magenta", width=8)
+        summary.add_column("Records", style="white", justify="right")
+        summary.add_column("Status", style="green")
+
+        for d in result['details']:
+            status_str = d['status']
+            status_style = "green" if status_str == "ok" else ("yellow" if status_str == "empty" else "red")
+            summary.add_row(
+                d['file'],
+                d.get('file_type', '—'),
+                f"{d['records']:,}",
+                f"[{status_style}]{status_str}[/{status_style}]",
+            )
+
+        console.print(summary)
+        console.print()
+        console.print(f"[bold green]Total records indexed:[/bold green] {result['total_records']:,}")
+        console.print(f"[dim]Files processed: {result['files_processed']}  |  Skipped: {result['files_skipped']}[/dim]\n")
+
+    except Exception as e:
+        console.print(f"\n[bold red]Error:[/bold red] {str(e)}\n")
+        raise click.Abort()
+
+
 # Export commands
 __all__ = ['fitrs_cli']
