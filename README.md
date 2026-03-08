@@ -12,6 +12,7 @@ A comprehensive Python package for accessing ESMA (European Securities and Marke
 - **CFI Classification**: Complete ISO 10962 decoding with full attribute descriptions
 - **Instrument Lookup**: `esma-dm firds reference <ISIN>` — master fields, CFI classification, and typed detail columns
 - **Instrument Search**: `esma-dm firds search <query>` — search by name or ISIN prefix with asset-type filter
+- **Database CLI**: `esma-dm db stats|reinit|drop` — inspect, reset, and manage the local DuckDB database
 - **Complete Field Coverage**: Full name, short name, and all ESMA reference data fields
 - **High Performance**: Vectorized bulk loading at 33,000+ instruments/second
 - **DuckDB Storage**: Fast analytical queries on star schema with 12 normalized tables
@@ -263,6 +264,39 @@ esma-dm info
 # Show version only
 esma-dm --version
 ```
+
+### Database Management
+
+Manage the local DuckDB database from the command line.
+
+```bash
+# Show database statistics (instruments, listings, asset type breakdown)
+esma-dm db stats
+
+# Include per-table row counts for all 24 tables
+esma-dm db stats --tables
+
+# Drop and reinitialize the schema (interactive confirmation)
+esma-dm db reinit
+
+# Same for history-mode database
+esma-dm db reinit --mode history
+
+# Skip confirmation prompt
+esma-dm db reinit --yes
+
+# Drop without reinitializing
+esma-dm db drop --yes
+```
+
+`db stats` output includes:
+
+- Database file path and size on disk
+- Total instruments and listings, distinct trading venues
+- Per-asset-type instrument counts with the corresponding detail table name
+- FITRS transparency table row counts
+
+`db reinit` is the correct command after a corrupted or duplicate-insert run. It drops the database file and calls schema initialization before prompting to re-index from cache.
 
 ## Configuration Management
 

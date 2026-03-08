@@ -20,7 +20,7 @@ console = Console()
 
 @click.group(name='firds')
 def firds_cli():
-    """FIRDS (Reference Data) file management commands."""
+    """FIRDS reference data — file management and instrument lookup."""
     pass
 
 

@@ -4,6 +4,37 @@ All notable changes to the esma-dm project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.3.6] - 2026-03-08
+
+### Added - Database Management CLI (`esma-dm db`)
+
+New `db` command group with three subcommands:
+
+`esma-dm db stats [--tables]`
+- Database file path and size
+- Total instruments, total listings, distinct trading venues
+- Instrument count per asset type with detail table name
+- FITRS transparency table row counts (when populated)
+- `--tables` flag enumerates all 24 tables with row counts
+
+`esma-dm db reinit [--mode current|history] [--yes]`
+- Drops the database file and reinitializes the schema
+- Interactive confirmation prompt (bypass with `--yes`)
+- Reports new file size after fresh schema creation
+
+`esma-dm db drop [--mode current|history] [--yes]`
+- Removes the database file without reinitializing
+- Interactive confirmation prompt (bypass with `--yes`)
+
+### Changed
+
+- `firds` CLI group description updated from "file management commands" to
+  "FIRDS reference data — file management and instrument lookup" to reflect
+  the addition of `reference` and `search` subcommands.
+- `esma_dm/cli/main.py` bumped version to reflect new command group.
+
+---
+
 ## [0.3.5] - 2026-03-08
 
 ### Added - Instrument Lookup and Search CLI Commands

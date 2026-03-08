@@ -10,6 +10,7 @@ from .fitrs import fitrs_cli
 from .dvcap import dvcap_cli
 from .benchmarks import benchmarks_cli
 from .schema import schema_cli
+from .db import db_cli
 
 console = Console()
 
@@ -31,6 +32,7 @@ cli.add_command(fitrs_cli)
 cli.add_command(dvcap_cli)
 cli.add_command(benchmarks_cli)
 cli.add_command(schema_cli)
+cli.add_command(db_cli)
 
 
 @cli.command()
