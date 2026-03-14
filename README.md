@@ -36,24 +36,28 @@ The package follows a clean, modular architecture with clear separation of conce
 
 ```
 esma_dm/
-├── clients/          # Data source clients
-│   ├── firds/        # Modular FIRDS client (6 focused modules)
-│   ├── fitrs/        # FITRS transparency data
-│   └── ssr/          # Short selling regulation
-├── config/           # Configuration management
-│   ├── base.py       # Base configuration class
-│   └── registry.py   # Specialized configurations
-├── storage/          # Database backends
-│   ├── duckdb/       # DuckDB implementation (5 focused modules)
-│   ├── schema/       # Table definitions
-│   └── bulk/         # Bulk loading operations
-├── models/           # Data models and mappers
-├── utils/            # Shared utilities
-│   ├── validators.py # ISO standard validators
-│   ├── constants.py  # URLs and configuration
-│   ├── query_builder.py # SQL query patterns
-│   └── shared_utils.py # Common utilities
-└── reference_api.py  # High-level query interface
+├── clients/              # Data source clients
+│   ├── firds/            # Modular FIRDS client (6 focused modules)
+│   ├── fitrs.py          # FITRS transparency client
+│   ├── ssr.py            # Short selling regulation client
+│   └── benchmarks.py     # Benchmarks client
+├── cli/                  # Command-line interface commands
+├── config/               # Configuration management
+│   ├── base.py           # Base configuration class
+│   └── registry.py       # Specialized configurations
+├── file_manager/         # File download and caching layer
+├── models/               # Data models and mappers
+├── storage/              # Database backends
+│   ├── duckdb/           # DuckDB implementation (5 focused modules)
+│   ├── fitrs/            # FITRS storage backend
+│   └── schema/           # Table definitions
+├── utils/                # Shared utilities
+│   ├── validators.py     # ISO standard validators
+│   ├── constants.py      # URLs and configuration
+│   ├── query_builder.py  # SQL query patterns
+│   └── shared_utils.py   # Common utilities
+├── reference_api.py      # Hierarchical reference API
+└── transparency_api.py   # Transparency data API
 ```
 
 ### Benefits
@@ -364,20 +368,14 @@ date_range = current_config.get_date_range('2025-01-01')  # Returns validated ra
 Optimized for querying latest instrument data with minimal storage overhead:
 
 ```python
-# Automatically uses optimized settings
-firds = edm.FIRDSClient(mode='current')
-# - Caching enabled for fast iteration
-# - Larger batch sizes for performance
-# - Latest snapshots only (9 core columns)
-```
-firds = edm.FIRDSClient(mode='current')  # Uses firds_current.duckdb
+firds = edm.FIRDSClient(mode='current')  # Uses esma_current.duckdb
 firds.data_store.initialize()
 
 # Download uses cached files by default (fast during development)
-firds.get_latest_full_files(asset_type='E')  # Uses cached
+firds.get_latest_full_files(asset_type='E')  # Uses cached files
 firds.get_latest_full_files(asset_type='E', update=True)  # Force fresh download
 
-# Simple workflow: latest snapshots only
+# Latest snapshots only (9 core columns)
 results = firds.index_cached_files()
 ```
 
@@ -391,7 +389,7 @@ results = firds.index_cached_files()
 Full ESMA Section 8.2 compliance with version tracking and delta processing:
 
 ```python
-firds = edm.FIRDSClient(mode='history')  # Uses firds_history.duckdb
+firds = edm.FIRDSClient(mode='history')  # Uses esma_history.duckdb
 firds.data_store.initialize()
 
 # Initial load with FULINS files
@@ -453,8 +451,8 @@ print(f"Tables created: {result['tables_created']}")
 ```
 
 **Mode selection:**
-- `mode='current'`: firds_current.duckdb - Latest snapshots only
-- `mode='history'`: firds_history.duckdb - Full version tracking
+- `mode='current'`: esma_current.duckdb - Latest snapshots only
+- `mode='history'`: esma_history.duckdb - Full version tracking
 
 ### 3. Download Data
 
@@ -641,13 +639,13 @@ This enables regulatory compliance for historical queries and audit trails per E
 
 See `examples/` directory:
 
-- `01_basic_usage.py` - Getting started
-- `02_reference_lookup.py` - Query methods  
+- `00_initialize_database.py` - Database initialization
+- `02_index_with_filters.py` - Download and index with asset type filters
 - `03_cfi_classification.py` - CFI classification and decoding
-- `06_transparency_data.py` - FITRS transparency data and cross-database queries
+- `06_transparency_data.py` - FITRS transparency data queries
 
 ```bash
-python examples/01_basic_usage.py
+python examples/00_initialize_database.py
 python examples/06_transparency_data.py
 ```
 
@@ -717,51 +715,23 @@ classifications = fitrs.list_classifications()
 info = fitrs.get_methodology_info('YEAR')
 # {'code': 'YEAR', 'description': 'Yearly methodology (12-month rolling period)', ...}
 
-# Cross-database queries (join FIRDS + FITRS)
-edm.transparency.attach_firds()
+# Cross-table queries (FIRDS instruments + FITRS transparency in unified DB)
 sql = """
-SELECT f.isin, f.full_name, f.short_name, t.liquid_market, t.average_daily_turnover
-FROM firds.instruments f
-JOIN transparency t ON f.isin = t.isin
+SELECT i.isin, i.full_name, i.short_name, t.liquid_market, t.average_daily_turnover
+FROM instruments i
+JOIN transparency t ON i.isin = t.isin
 WHERE t.liquid_market = TRUE AND t.methodology = 'YEAR'
 """
 results = edm.transparency.client.data_store.query(sql)
 ```
 
 **Features**:
-- Separate fitrs.db database for transparency data
+- Unified database: FIRDS and FITRS transparency data in the same esma_{mode}.duckdb
 - Support for all 6 file types: FULECR, FULNCR, DLTECR, DLTNCR, FULNCR_NYAR, FULNCR_SISC
 - Full MiFIR compliance: most relevant market, application periods, LIS/SSTI thresholds
 - Sub-class level results with segmentation criteria (30+ criteria types)
 - Utility enums with descriptions for abbreviated codes (methodologies, classifications, criteria)
-- Cross-database queries via DuckDB ATTACH
 - Filter by liquidity, instrument type, methodology, turnover thresholds
-
-## Project Structure
-
-```
-esma-dm/
-├── esma_dm/
-│   ├── clients/          # FIRDS, FITRS, SSR, Benchmarks
-│   ├── storage/          # DuckDB storage with modular architecture
-│   │   ├── schema.py     # FIRDS table definitions (12 tables)
-│   │   ├── fitrs_schema.py    # FITRS table definitions (4 tables)
-│   │   ├── bulk_inserters.py  # Asset-specific bulk insert handlers
-│   │   ├── duckdb_store.py    # FIRDS storage orchestration
-│   │   └── fitrs_store.py     # FITRS storage with cross-database support
-│   ├── models/           # Data models and CFI classification
-│   │   ├── subtypes.py   # 8 specialized output models for major subtypes
-│   │   └── utils/
-│   │       └── cfi/      # ISO 10962 package (one module per category + shared + manager)
-│   ├── reference_api.py  # Hierarchical reference API
-│   ├── transparency_api.py    # Transparency data API
-│   └── utils.py
-├── tools/                # Analysis and inspection tools
-│   ├── analyze_field_coverage.py      # Compare DB vs CSV data quality
-│   ├── display_database_schema.py     # Show actual DuckDB table schemas
-│   └── display_schemas.py             # Show Python model schemas
-└── examples/             # Usage examples
-```
 
 ## Key Features
 
@@ -773,8 +743,8 @@ esma-dm/
 - **Statistics**: Count and sample methods for each asset type
 
 ### Transparency API
-- **FITRS data**: Separate database for transparency metrics
-- **Cross-database queries**: Join reference data with transparency via DuckDB ATTACH
+- **FITRS data**: Unified storage — transparency and reference data in the same esma_{mode}.duckdb
+- **Direct joins**: Query instruments joined with transparency without any ATTACH
 - **Liquidity filtering**: Query by liquid_market flag and turnover thresholds
 - **File support**: FULECR (equity) and FULNCR (non-equity) formats
 - **Simple interface**: `edm.transparency('ISIN')` for direct lookups
@@ -786,24 +756,28 @@ esma-dm/
 - All 14 group enums and helper functions re-exported through the package `__init__.py`; existing import paths unchanged
 
 ### DuckDB Storage
-- Star schema with master instruments table + 10 asset-specific tables
+- Star schema with master instruments table + 14 asset-specific tables
 - ISO 10962 compliant naming: `spot_instruments` (I), `forward_instruments` (J)
-- Complete support for all FIRDS asset types:
+- Complete support for all 14 FIRDS asset types:
   - C: Collective Investment Vehicles
   - D: Debt Instruments (bonds, notes with interest rate fields)
   - E: Equities (shares with dividend/voting rights)
   - F: Futures (with commodity product classifications)
-  - H: Referential Instruments (options with full strike price variations)
+  - H: Non-Standard Derivatives (warrants, OTC options, swaptions)
   - I: Spot (spot contracts and indices)
   - J: Forwards (forward contracts and warrants)
+  - K: Strategies (multi-leg combinations)
+  - L: Financing (repos, SFTs)
+  - M: Others / miscellaneous
   - O: Options (OTC with strike price variations)
-  - R: Rights/Entitlements (warrants, subscription rights)
+  - R: Rights/Entitlements (subscription rights)
   - S: Swaps (interest rate and FX swaps)
+  - T: Referential (currencies, benchmarks, indices)
 - Vectorized bulk loading with pandas + DuckDB
 - Foreign key relationships for data integrity
 - 11 indexes for optimized query patterns
 - Modular architecture: separated schema, bulk inserters, orchestration
-- Separate FITRS database (fitrs.db) for transparency data
+- FIRDS and FITRS transparency data unified in esma_{mode}.duckdb
 
 ### Validation
 - ISIN (ISO 6166)
@@ -812,10 +786,9 @@ esma-dm/
 
 ## Performance
 
-- **2.37M instruments** indexed in 71 seconds
-- **33,374 instruments/second** average rate
-- **Asset-specific rates**: 142K inst/sec (CIVs), 83K inst/sec (equities), 61K inst/sec (debt)
-- **Database size**: 625 MB for 2.37M instruments
+- **7.03M instruments** across all 14 FIRDS asset types
+- **10.76M FITRS transparency records** (equity and non-equity)
+- **Database size**: ~6.87 GB combined (FIRDS reference + FITRS transparency)
 - **Query speed**: Sub-second SQL queries with indexed columns
 - **Memory efficient**: Vectorized pandas operations with DuckDB bulk insert
 

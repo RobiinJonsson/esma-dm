@@ -24,7 +24,7 @@ Example:
     >>> instrument = firds.reference('US0378331005')
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.7"
 __author__ = "Robin"
 __description__ = "ESMA Data Manager - Comprehensive wrapper for ESMA published data"
 

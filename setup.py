@@ -7,7 +7,7 @@ long_description = (this_directory / "README.md").read_text(encoding='utf-8')
 
 setup(
     name="esma-dm",
-    version="0.3.0",
+    version="0.3.7",
     author="Robin Jonsson",
     description="ESMA Data Manager - Modular Python package for ESMA financial data with utilities and validators",
     long_description=long_description,

@@ -4,6 +4,46 @@ All notable changes to the esma-dm project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.3.8] - 2026-03-08
+
+### Fixed
+
+- `classify_instrument()` and `get_instruments_by_cfi_category()` in
+  `esma_dm/storage/duckdb/queries.py` used the non-existent `CFI.from_code()`
+  method and stale `cfi_info.attribute1` / `cfi_info.attribute2` fields. Replaced
+  with `decode_cfi()` and updated attribute access to use `cfi_info.attributes`
+  dict, consistent with the current CFI dataclass API.
+- CLI version string was stuck at `0.3.0` in `esma_dm/cli/main.py`. Updated to
+  `0.3.7`.
+
+### Removed - Codebase cleanup
+
+Deleted legacy and one-off development artifacts that were superseded by CLI
+commands or prior refactoring:
+
+- `tools/` directory (entire): `_check_db.py`, `_check_listings.py`,
+  `analyze_data_population.py`, `analyze_data_population_fixed.py`,
+  `display_database_schema.py`, `display_model_schemas.py`, `dump_all_attrs.py`,
+  `dump_cfi.py`, `dump_remaining.py`, `inspect_json_structure.py`,
+  `inspect_sample_instruments.py`, `verify_models.py` — all replaced by the
+  `esma-dm schema` CLI and `esma-dm db stats` commands.
+- `scripts/` directory (entire): `test_virtual_env.py` — one-off environment check.
+- `downloads/analysis/` — debug artifacts (`firds_column_mapping_guide.json`,
+  `SYSTEMATIC_FIX_REQUIRED.md`, etc.) from the indexing bug-fix phase.
+- `esma_dm/file_manager/firds/parser.py` — exact duplicate of
+  `esma_dm/clients/firds/parser.py`; not imported by any active module.
+- `esma_dm/file_manager/firds/delta_processor.py` — legacy stub not imported
+  anywhere; active delta processor lives in `esma_dm/clients/firds/delta_processor.py`.
+- `esma_dm/initialize.py` — interactive init wizard superseded by
+  `esma-dm db reinit`.
+- `esma_dm/status.py` — not imported anywhere; superseded by `esma-dm db stats`.
+- Root `config.py` — legacy project-level config superseded by
+  `esma_dm/config/`.
+- Root `initialize_and_analyze.py` — one-off development script superseded by
+  `esma-dm db reinit` and `esma-dm db stats`.
+
+---
+
 ## [0.3.7] - 2026-03-08
 
 ### Fixed - FITRS `insert_transparency_data` bugs

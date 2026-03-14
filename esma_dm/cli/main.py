@@ -16,7 +16,7 @@ console = Console()
 
 
 @click.group()
-@click.version_option(version='0.3.0', prog_name='esma-dm')
+@click.version_option(version='0.3.7', prog_name='esma-dm')
 def cli():
     """
     ESMA Data Manager - CLI for managing ESMA financial data.
@@ -39,7 +39,7 @@ cli.add_command(db_cli)
 def info():
     """Show package information."""
     console.print("\n[bold cyan]ESMA Data Manager[/bold cyan]", style="bold")
-    console.print("Version: 0.3.0")
+    console.print("Version: 0.3.7")
     console.print("\nA modular Python package for ESMA financial data")
     console.print("with utilities and validators.\n")
     console.print("[dim]Use 'esma-dm --help' for available commands.[/dim]\n")

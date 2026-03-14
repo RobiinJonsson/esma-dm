@@ -257,33 +257,31 @@ class DuckDBQueries:
         cfi_code = instrument["cfi_code"]
         
         try:
-            cfi_info = CFI.from_code(cfi_code)
-            
+            cfi_info = decode_cfi(cfi_code)
+            if not cfi_info:
+                return None
+
+            attr_vals = list(cfi_info.attributes.values())
             classification = {
                 "isin": isin,
                 "cfi_code": cfi_code,
                 "category": cfi_info.category,
                 "group": cfi_info.group,
-                "attribute1": cfi_info.attribute1,
-                "attribute2": cfi_info.attribute2,
+                "attribute1": attr_vals[0] if len(attr_vals) > 0 else None,
+                "attribute2": attr_vals[1] if len(attr_vals) > 1 else None,
                 "full_name": instrument.get("full_name"),
                 "issuer": instrument.get("issuer")
             }
-            
-            # Add human-readable descriptions
-            try:
-                classification["descriptions"] = {
-                    "category_desc": cfi_info.category_description,
-                    "group_desc": cfi_info.group_description,
-                    "attribute1_desc": cfi_info.attribute1_description,
-                    "attribute2_desc": cfi_info.attribute2_description
-                }
-            except AttributeError:
-                # Fallback for older CFI implementation
-                pass
-            
+
+            # Add human-readable descriptions from attributes dict
+            classification["descriptions"] = {
+                "category_desc": cfi_info.category,
+                "group_desc": cfi_info.group,
+                **cfi_info.attributes
+            }
+
             return classification
-            
+
         except Exception as e:
             self.logger.error(f"Failed to classify instrument {isin}: {e}")
             return None
@@ -316,12 +314,13 @@ class DuckDBQueries:
             
             # Add CFI classification
             try:
-                cfi_info = CFI.from_code(row[1])
-                instrument["classification"] = {
-                    "category": cfi_info.category,
-                    "group": cfi_info.group
-                }
-            except:
+                cfi_info = decode_cfi(row[1])
+                if cfi_info:
+                    instrument["classification"] = {
+                        "category": cfi_info.category,
+                        "group": cfi_info.group
+                    }
+            except Exception:
                 pass
                 
             instruments.append(instrument)
