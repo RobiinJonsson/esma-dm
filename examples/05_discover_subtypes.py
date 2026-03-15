@@ -1,137 +1,73 @@
 """
-Example: Using the reference API to discover available subtypes.
+Example: Analytics Dashboard
 
-Demonstrates how to query available subtype output models and their properties.
+Demonstrates the analytics capabilities built into FIRDSClient: per-asset-type
+statistics, database health checks, and the print_analytics_summary() method.
 """
 
 import esma_dm as edm
 
-# Check if database has data
-try:
+
+def main():
+    print("ESMA Data Manager - Analytics Dashboard")
+    print("=" * 60)
+
     firds = edm.FIRDSClient()
-    count = firds.data_store.con.execute("SELECT COUNT(*) FROM instruments").fetchone()[0]
-    if count == 0:
-        print("\nDatabase is empty. Please run:")
-        print("  1. python examples/00_initialize_database.py")
-        print("  2. Download and index data (see examples/02_index_with_filters.py)")
-        exit(1)
-except Exception as e:
-    print(f"\nDatabase error: {e}")
-    print("\nPlease run:")
-    print("  python examples/00_initialize_database.py")
-    exit(1)
+    try:
+        count = firds.data_store.con.execute(
+            "SELECT COUNT(*) FROM instruments"
+        ).fetchone()[0]
+        if count == 0:
+            print("\nDatabase is empty. Run:")
+            print("  firds.build_reference_database()")
+            return
+    except Exception:
+        print("\nDatabase not initialized. Run:")
+        print("  firds.initialize_database()")
+        return
 
-print("="*80)
-print("AVAILABLE SUBTYPE OUTPUT MODELS")
-print("="*80)
+    # 1. Quick analytics summary printed to console
+    print("\n1. Analytics Summary")
+    print("-" * 60)
+    firds.print_analytics_summary()
 
-# Get all available subtypes
-subtypes = edm.reference.subtypes()
+    # 2. Full analytics dashboard — scalar fields only
+    print("\n2. Analytics Dashboard Details")
+    print("-" * 60)
+    dashboard = firds.get_analytics_dashboard()
+    scalar_keys = [
+        'total_instruments', 'total_listings', 'unique_venues',
+        'cross_listed_count', 'avg_listings_per_instrument',
+        'mode', 'last_updated',
+    ]
+    for key in scalar_keys:
+        val = dashboard.get(key)
+        if val is not None:
+            print(f"  {key:<35}: {val}")
 
-print(f"\nTotal subtype models available: {len(subtypes)}")
-print(f"\nSubtypes ordered by volume:\n")
-print(subtypes.to_string(index=False))
+    # 3. Per-asset-type breakdown
+    print("\n3. Per-Asset-Type Breakdown")
+    print("-" * 60)
+    breakdown = firds.get_asset_breakdown()
+    print(breakdown.to_string(index=False))
 
-print("\n" + "="*80)
-print("SUBTYPE USAGE EXAMPLES")
-print("="*80)
+    # 4. Database statistics (scalar fields only)
+    print("\n4. Database Statistics")
+    print("-" * 60)
+    stats = firds.get_database_stats()
+    for key, val in stats.items():
+        if val is not None and not isinstance(val, (dict, list)):
+            print(f"  {key:<30}: {val}")
 
-print("""
-# Query instruments and get typed subtype instances:
+    # 5. Available subtype output models
+    print("\n5. Available Subtype Output Models")
+    print("-" * 60)
+    try:
+        subtypes = edm.reference.subtypes()
+        print(subtypes.to_string(index=False))
+    except Exception as e:
+        print(f"  subtypes() not available: {e}")
 
-from esma_dm.models import parse_instrument
-
-# Example 1: Equity Swaps (SE*)
-equity_swaps = firds.data_store.query(\"\"\"
-    SELECT * FROM swaps 
-    WHERE cfi_code LIKE 'SE%' 
-    LIMIT 10
-\"\"\")
-
-for row in equity_swaps:
-    swap = parse_instrument(row)  # Returns EquitySwap instance
-    print(f"Underlying: {swap.underlying_index_name}")
-    print(f"Rate: {swap.interest_rate_reference_name}")
-    
-
-# Example 2: Swaptions (HR*)  
-swaptions = firds.data_store.query(\"\"\"
-    SELECT * FROM non_standardized
-    WHERE cfi_code LIKE 'HR%'
-    LIMIT 10
-\"\"\")
-
-for row in swaptions:
-    swaption = parse_instrument(row)  # Returns Swaption instance
-    print(f"Option Type: {swaption.option_type}")
-    print(f"Strike: {swaption.strike_price_amount}")
-    print(f"Fixed Rate: {swaption.first_leg_interest_rate_fixed}")
-
-
-# Example 3: Mini-Futures (RF*)
-mini_futures = firds.data_store.query(\"\"\"
-    SELECT * FROM entitlements
-    WHERE cfi_code LIKE 'RF%'
-    LIMIT 10
-\"\"\")
-
-for row in mini_futures:
-    mf = parse_instrument(row)  # Returns MiniFuture instance
-    print(f"Underlying: {mf.underlying_index_name}")
-    print(f"Option Type: {mf.option_type}")
-    print(f"Strike: {mf.strike_price_amount}")
-    if mf.commodity_metal_precious_base:
-        print(f"Commodity: {mf.commodity_metal_precious_base}")
-
-
-# Example 4: Commodity Futures (FC*)
-from esma_dm.models import CommodityFuture
-
-commodity_futures = firds.data_store.query(\"\"\"
-    SELECT * FROM futures
-    WHERE cfi_code LIKE 'FC%'
-    LIMIT 10
-\"\"\")
-
-for row in commodity_futures:
-    future = CommodityFuture.from_dict(row)
-    print(f"Commodity: {future.commodity_dairy_base or future.commodity_grain_base}")
-    print(f"Transaction Type: {future.commodity_transaction_type}")
-    print(f"Final Price Type: {future.commodity_final_price_type}")
-""")
-
-print("\n" + "="*80)
-print("ARCHITECTURE SUMMARY")
-print("="*80)
-
-print("""
-STORAGE (Database):
-  • Common columns (isin, cfi_code, name, dates, issuer, etc.)
-  • JSONB 'attributes' column with 22-56 subtype-specific FIRDS fields
-
-OUTPUT (Python Models):
-  • Typed dataclasses per CFI subtype (8 models covering 12.4M instruments)
-  • from_dict() method parses JSON and maps FIRDS fields to properties
-  • Based on actual verified FIRDS field names
-  • IDE autocomplete and type hints
-
-BENEFITS:
-  ✓ Efficient storage (no NULL columns for unused fields)
-  ✓ Complete data coverage (all FIRDS fields extracted)
-  ✓ Typed Python access (autocomplete, validation)
-  ✓ Easy to query common fields (indexed columns)
-  ✓ Flexible JSON queries for specialized fields
-  ✓ Extensible (new subtypes without schema changes)
-""")
 
 if __name__ == "__main__":
-    # Actually run the subtypes query if esma_dm is properly configured
-    try:
-        print("\n" + "="*80)
-        print("ACTUAL DATA FROM YOUR INSTALLATION")
-        print("="*80)
-        subtypes_actual = edm.reference.subtypes()
-        print(subtypes_actual.to_string(index=False))
-    except Exception as e:
-        print(f"\nNote: Could not query actual data: {e}")
-        print("This is normal if database hasn't been initialized yet.")
+    main()

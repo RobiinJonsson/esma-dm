@@ -62,10 +62,10 @@ def main():
         print(f"   Database error: {e}")
     
     print("\n=== API Improvement Summary ===")
-    print("✅ Reduced from 20+ methods to 6 high-level orchestration methods")
-    print("✅ Clear component boundaries: .download, .parse, .store, .delta")
-    print("✅ Self-documenting API through component grouping")
-    print("✅ Backward compatibility maintained for critical methods")
+    print("- Reduced from 20+ methods to 6 high-level orchestration methods")
+    print("- Clear component boundaries: .download, .parse, .store, .delta")
+    print("- Self-documenting API through component grouping")
+    print("- Backward compatibility maintained for critical methods")
 
 if __name__ == "__main__":
     main()

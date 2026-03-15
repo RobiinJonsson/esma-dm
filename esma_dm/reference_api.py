@@ -123,7 +123,7 @@ class ReferenceAPI:
         Returns:
             Dictionary containing instrument reference data
         """
-        return self._client.reference(isin)
+        return self._client.get_reference_data(isin)
     
     @property
     def equity(self) -> AssetTypeAPI:

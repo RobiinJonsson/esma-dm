@@ -1,184 +1,136 @@
 """
-Example: CFI Classification of Instruments
+Example: CFI Classification
 
-Demonstrates how to use the CFI (Classification of Financial Instruments) 
-module to decode and classify instruments according to ISO 10962 standard.
+Demonstrates ISO 10962 CFI decoding and instrument classification across all
+14 FIRDS asset categories using the reference API and CFI decode utilities.
 """
 
-from pathlib import Path
-from esma_dm.storage import DuckDBStorage
-from esma_dm.models.utils import CFI, Category
-from esma_dm.config import Config
+import esma_dm as edm
+from esma_dm.models.utils.cfi.cfi_instrument_manager import decode_cfi
 
-def demonstrate_cfi_classification():
-    """Demonstrate CFI classification features."""
+CATEGORIES = {
+    'C': 'Collective Investment Vehicles',
+    'D': 'Debt Instruments',
+    'E': 'Equities',
+    'F': 'Futures',
+    'H': 'Non-Standard Derivatives',
+    'I': 'Spot',
+    'J': 'Forwards',
+    'K': 'Strategies',
+    'L': 'Financing',
+    'M': 'Others',
+    'O': 'Options',
+    'R': 'Rights / Entitlements',
+    'S': 'Swaps',
+    'T': 'Referential',
+}
 
-    # Initialize storage
-    cache_dir = Path('downloads')
-    db_path = str(Config().get_database_path('current'))
-    storage = DuckDBStorage(cache_dir, db_path)
-    
-    # Check if database has data
+
+def main():
+    print("ESMA Data Manager - CFI Classification")
+    print("=" * 60)
+
+    firds = edm.FIRDSClient()
     try:
-        count = storage.con.execute("SELECT COUNT(*) FROM instruments").fetchone()[0]
+        count = firds.data_store.con.execute(
+            "SELECT COUNT(*) FROM instruments"
+        ).fetchone()[0]
         if count == 0:
-            print("\nDatabase is empty. Please run:")
-            print("  1. python examples/00_initialize_database.py")
-            print("  2. Download and index data")
+            print("\nDatabase is empty. Run:")
+            print("  firds.build_reference_database()")
             return
-    except:
-        print("\nDatabase not initialized. Please run:")
-        print("  python examples/00_initialize_database.py")
+    except Exception:
+        print("\nDatabase not initialized. Run:")
+        print("  firds.initialize_database()")
         return
-    
-    print("="*80)
-    print("CFI CLASSIFICATION DEMONSTRATION")
-    print("="*80)
-    print()
-    
-    # 1. Get sample instruments from each category
-    print("Sample Instruments by CFI Category:")
-    print("-"*80)
-    
-    categories = {
-        'E': 'Equities',
-        'D': 'Debt',
-        'C': 'Collective Investment Vehicles',
-        'F': 'Futures',
-        'O': 'Options',
-        'S': 'Swaps',
-        'H': 'Non-standardized Derivatives',
-        'R': 'Entitlements (Rights)',
-        'I': 'Spot',
-        'J': 'Forwards'
-    }
-    
-    for category_code, category_name in categories.items():
-        # Get one instrument from this category
-        results = storage.con.execute(f"""
+
+    # 1. Distribution across all 14 CFI categories
+    print(f"\n1. Instrument Distribution Across All 14 CFI Categories")
+    print("-" * 60)
+    breakdown = firds.get_asset_breakdown()
+    print(breakdown.to_string(index=False))
+
+    # 2. Three decoding examples — one from Debt, Futures, Swaps
+    print("\n2. CFI Decoding Examples (D, F, S)")
+    print("-" * 60)
+    for asset_letter, label in [('D', 'Debt'), ('F', 'Futures'), ('S', 'Swaps')]:
+        row = firds.data_store.con.execute(f"""
             SELECT isin, full_name, cfi_code
             FROM instruments
-            WHERE cfi_code LIKE '{category_code}%'
-            LIMIT 1
-        """).fetchall()
-        
-        if results:
-            isin, name, cfi_code = results[0]
-            print(f"\n{category_name} ({category_code}):")
-            print(f"  ISIN: {isin}")
-            print(f"  Name: {name[:60]}...")
-            print(f"  CFI: {cfi_code}")
-            
-            # Decode the CFI
-            try:
-                cfi = CFI(cfi_code)
-                print(f"  Category: {cfi.category_description}")
-                print(f"  Group: {cfi.group_description}")
-                
-                # Show attribute details
-                attrs = cfi.describe()
-                if 'decoded_attributes' in attrs:
-                    print(f"  Attributes:")
-                    for key, value in list(attrs['decoded_attributes'].items())[:3]:
-                        print(f"    - {key}: {value}")
-            except Exception as e:
-                print(f"  Error decoding: {e}")
-    
-    print("\n" + "="*80)
-    print("Detailed Classification Examples")
-    print("="*80)
-    
-    # 2. Show detailed classification for specific instruments
-    test_isins = []
-    
-    # Get one ISIN from each major category
-    for cat in ['E', 'D', 'F', 'O']:
-        result = storage.con.execute(f"""
-            SELECT isin FROM instruments 
-            WHERE cfi_code LIKE '{cat}%' 
+            WHERE cfi_code LIKE '{asset_letter}%'
+              AND LENGTH(cfi_code) = 6
             LIMIT 1
         """).fetchone()
-        if result:
-            test_isins.append(result[0])
-    
-    for isin in test_isins:
-        print(f"\n{'-'*80}")
-        classification = storage.classify_instrument(isin)
-        
-        if classification:
-            print(f"ISIN: {classification['isin']}")
-            print(f"Name: {classification['name'][:60]}...")
-            print(f"CFI Code: {classification['cfi_code']}")
-            print(f"Instrument Type: {classification['instrument_type']}")
-            
-            if isinstance(classification.get('classification'), dict):
-                cls = classification['classification']
-                print(f"\nFull Classification:")
-                print(f"  Category: {cls.get('category_description')}")
-                print(f"  Group: {cls.get('group_description')}")
-                
-                if 'decoded_attributes' in cls:
-                    print(f"  Decoded Attributes:")
-                    for key, value in cls['decoded_attributes'].items():
-                        print(f"    - {key}: {value}")
-    
-    # 3. Search and classify
-    print("\n" + "="*80)
-    print("Search with CFI Classification")
-    print("="*80)
-    
-    search_results = storage.search_instruments("BOND", limit=5)
-    print(f"\nSearch results for 'BOND':")
-    for inst in search_results:
-        print(f"\n  {inst['isin']} - {inst['full_name'][:50]}...")
-        print(f"  CFI: {inst.get('cfi_code')}")
-        if 'category_description' in inst:
-            print(f"  Category: {inst['category_description']}")
-            print(f"  Group: {inst['group_description']}")
-    
-    # 4. Get instruments by CFI category
-    print("\n" + "="*80)
-    print("Instruments by CFI Category: Equities (E)")
-    print("="*80)
-    
-    equities = storage.get_instruments_by_cfi_category('E', limit=10)
-    print(f"\nFound {len(equities)} equities:")
-    for eq in equities[:5]:  # Show first 5
-        print(f"\n  {eq['isin']}")
-        print(f"  Name: {eq['name'][:50]}...")
-        print(f"  CFI: {eq['cfi_code']}")
-        print(f"  Category: {eq['category']}")
-        print(f"  Group: {eq['group']}")
-    
-    # 5. CFI Statistics
-    print("\n" + "="*80)
-    print("CFI Category Statistics")
-    print("="*80)
-    
-    stats = storage.con.execute("""
-        SELECT 
-            SUBSTRING(cfi_code, 1, 1) as category,
-            COUNT(*) as count
-        FROM instruments
-        WHERE cfi_code IS NOT NULL
-        GROUP BY category
-        ORDER BY count DESC
-    """).fetchall()
-    
-    print(f"\n{'Category':<15} {'Code':<10} {'Count':>15}")
-    print("-"*40)
-    for cat_code, count in stats:
-        try:
-            cat = Category(cat_code)
-            cat_name = categories.get(cat_code, 'Unknown')
-            print(f"{cat_name:<15} {cat_code:<10} {count:>15,}")
-        except:
-            print(f"{'Unknown':<15} {cat_code:<10} {count:>15,}")
-    
-    storage.close()
-    print("\n" + "="*80)
-    print("Classification demonstration complete!")
-    print("="*80)
+        if not row:
+            print(f"  [{label}] no instruments found")
+            continue
+        isin, name, cfi_code = row
+        decoded = decode_cfi(cfi_code)
+        print(f"\n  [{label}]")
+        print(f"  ISIN     : {isin}")
+        print(f"  Name     : {str(name)[:60]}")
+        print(f"  CFI      : {cfi_code}")
+        if decoded:
+            print(f"  Category : {decoded.category} ({decoded.category_code})")
+            print(f"  Group    : {decoded.group} ({decoded.group_code})")
+            for attr_key, attr_val in decoded.attributes.items():
+                label_str = attr_key.replace('_', ' ').title()
+                print(f"  {label_str:<20}: {attr_val}")
 
-if __name__ == '__main__':
-    demonstrate_cfi_classification()
+    # 3. Full decode of the top 5 most common D* (Debt) CFI codes
+    print("\n3. Full Decode of Top 5 Debt CFI Codes (D*)")
+    print("-" * 60)
+    top_debt = firds.data_store.con.execute("""
+        SELECT cfi_code, COUNT(*) AS cnt
+        FROM instruments
+        WHERE cfi_code LIKE 'D%'
+          AND LENGTH(cfi_code) = 6
+        GROUP BY cfi_code
+        ORDER BY cnt DESC
+        LIMIT 5
+    """).fetchall()
+
+    for cfi_code, cnt in top_debt:
+        decoded = decode_cfi(cfi_code)
+        print(f"\n  CFI: {cfi_code}  ({cnt:,} instruments)")
+        if decoded:
+            print(f"  Category : {decoded.category}")
+            print(f"  Group    : {decoded.group} ({decoded.group_code})")
+            for attr_key, attr_val in decoded.attributes.items():
+                label_str = attr_key.replace('_', ' ').title()
+                print(f"  {label_str:<20}: {attr_val}")
+        else:
+            print("  (could not decode)")
+
+    # 4. Direct ISIN lookup with CFI decode
+    print("\n4. Direct ISIN Lookup")
+    print("-" * 60)
+    row = firds.data_store.con.execute(
+        "SELECT isin FROM instruments WHERE cfi_code LIKE 'E%' LIMIT 1"
+    ).fetchone()
+    if row:
+        isin = row[0]
+        instrument = edm.reference(isin)
+        if instrument is not None:
+            print(f"  ISIN    : {instrument.get('isin')}")
+            print(f"  Name    : {str(instrument.get('full_name', ''))[:60]}")
+            print(f"  CFI     : {instrument.get('cfi_code')}")
+            cfi_code = instrument.get('cfi_code', '')
+            if cfi_code and len(cfi_code) == 6:
+                try:
+                    decoded = decode_cfi(cfi_code)
+                    if decoded:
+                        print(f"  Category: {decoded.category}")
+                        print(f"  Group   : {decoded.group}")
+                except Exception:
+                    pass
+
+    # 5. Asset type summary via reference API
+    print("\n5. Asset Type Summary")
+    print("-" * 60)
+    summary = edm.reference.summary()
+    print(summary.to_string(index=False))
+
+
+if __name__ == "__main__":
+    main()

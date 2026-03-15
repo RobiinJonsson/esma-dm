@@ -382,11 +382,15 @@ class FITRSClient:
         
         # Filter files by type
         if is_subclass:
-            # Sub-class files: FULNCR_YYYYMMDD_NYAR_<AssetClass>_XofY.zip
-            files = files[files['file_name'].str.contains(file_type, na=False)]
+            # Sub-class files are named: FULNCR_YYYYMMDD_NYAR_<AssetClass>_XofY.zip
+            # The file_type token (NYAR/SISC) appears after the date, not at the start.
+            sub_code = file_type.split('_', 1)[1]  # 'NYAR' or 'SISC'
+            files = files[files['file_name'].str.contains(f'_{sub_code}_', na=False)]
         else:
             # ISIN-level files: FULECR_YYYYMMDD_<CFI>_XofY.zip
+            # Exclude sub-class variants (NYAR, SISC) which share the FULNCR prefix
             files = files[files['file_name'].str.contains(file_type, na=False)]
+            files = files[~files['file_name'].str.contains('NYAR|SISC', na=False)]
         
         # Apply asset type filter (only for ISIN-level)
         if asset_type and not is_subclass:
@@ -395,7 +399,8 @@ class FITRSClient:
         if latest_only:
             if is_subclass:
                 # Sub-class: FULNCR_YYYYMMDD_NYAR_<AssetClass>_XofY.zip
-                pattern = rf"{file_type}_(?P<date>\d{{8}})_(?P<asset>\w+)"
+                sub_code = file_type.split('_', 1)[1]  # 'NYAR' or 'SISC'
+                pattern = rf"FULNCR_(?P<date>\d{{8}})_{sub_code}_(?P<asset>\w+)"
             else:
                 # ISIN-level: FULECR_YYYYMMDD_E_XofY.zip or DLTECR_YYYYMMDD_E_XofY.zip
                 pattern = rf"{file_type}_(?P<date>\d{{8}})_(?P<asset>[A-Z])"
@@ -493,6 +498,9 @@ class FITRSClient:
         for path in csv_files:
             m = pattern.match(path.name)
             if not m:
+                continue
+            # Exclude sub-class variants (NYAR, SISC) — handled by index_transparency_data
+            if 'NYAR' in path.name or 'SISC' in path.name:
                 continue
             ftype, fdate = m.group(1), m.group(2)
             if file_types and ftype not in file_types:

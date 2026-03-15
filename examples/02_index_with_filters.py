@@ -20,10 +20,9 @@ def main():
     # Create FIRDS client
     print("\n1. Creating FIRDS client...")
     firds = FIRDSClient()
-    
-    # Drop and reinitialize for clean test
-    print("\n2. Initializing fresh database...")
-    firds.data_store.drop(confirm=True)
+
+    # Ensure schema exists without dropping any data
+    print("\n2. Verifying database schema...")
     firds.data_store.initialize(mode='current')
     
     # Example 1: Index only collective investment vehicles (latest only)
@@ -65,7 +64,7 @@ def main():
     print("\n6. Demonstration: Index all asset types at once...")
     print("   (Skipped to avoid processing, but would work like this:)")
     print("   result = firds.index_cached_files(latest_only=True)")
-    print("   This processes latest file for each asset type: C,D,E,F,H,I,J,O,R,S")
+    print("   This processes latest file for each asset type: C,D,E,F,H,I,J,K,L,M,O,R,S,T")
     
     print("\n" + "=" * 60)
     print("Index cached files examples complete!")

@@ -1,168 +1,161 @@
-"""
-Example: FITRS Transparency Data Access
-========================================
+﻿"""
+Example: FITRS Transparency Data
 
-Demonstrates how to:
-- Index transparency data (FULECR and FULNCR)
-- Query transparency metrics by ISIN
-- Filter by liquidity and turnover
-- Perform cross-database queries with FIRDS data
+Demonstrates how to index, query, and analyze FITRS transparency results.
+Both FIRDS reference data and FITRS transparency data share the same unified
+database (esma_{mode}.duckdb) -- no cross-database ATTACH required.
 """
 
-from esma_dm import transparency, reference
+import esma_dm as edm
+from esma_dm import FITRSClient
 
-# Example 1: Index equity transparency data
-print("=" * 60)
-print("Indexing Equity Transparency Data (FULECR)")
-print("=" * 60)
 
-result = transparency.index('FULECR', latest_only=True)
-print(f"Status: {result['status']}")
-print(f"Files processed: {result['files_processed']}")
-print(f"Total instruments: {result['total_instruments']}")
-print(f"Instrument type: {result['instrument_type']}")
-print()
+def main():
+    print("ESMA Data Manager - Transparency Data")
+    print("=" * 60)
 
-# Example 2: Index non-equity transparency data
-print("=" * 60)
-print("Indexing Non-Equity Transparency Data (FULNCR)")
-print("=" * 60)
+    # 1. Index equity transparency data (FULECR)
+    print("\n1. Index Equity Transparency Data (FULECR)")
+    print("-" * 60)
+    fitrs = FITRSClient()
+    _eq_ok = fitrs.data_store.con.execute(
+        "SELECT COUNT(*) FROM transparency WHERE instrument_type = 'equity' AND liquid_market IS NOT NULL"
+    ).fetchone()[0]
+    if _eq_ok > 0:
+        _eq_total = fitrs.data_store.con.execute(
+            "SELECT COUNT(*) FROM transparency WHERE instrument_type = 'equity'"
+        ).fetchone()[0]
+        print(f"  Already indexed: {_eq_total:,} equity records -- skipping download")
+    else:
+        result = edm.transparency.index('FULECR', latest_only=True)
+        print(f"  Status          : {result.get('status')}")
+        print(f"  Files processed : {result.get('files_processed')}")
+        print(f"  Records loaded  : {result.get('total_records', 0):,}")
 
-result = transparency.index('FULNCR', latest_only=True)
-print(f"Status: {result['status']}")
-print(f"Files processed: {result['files_processed']}")
-print(f"Total instruments: {result['total_instruments']}")
-print(f"Instrument type: {result['instrument_type']}")
-print()
+    # 2. Index non-equity transparency data (FULNCR)
+    print("\n2. Index Non-Equity Transparency Data (FULNCR)")
+    print("-" * 60)
+    _neq_ok = fitrs.data_store.con.execute(
+        "SELECT COUNT(*) FROM transparency WHERE instrument_type = 'non_equity' AND liquid_market IS NOT NULL"
+    ).fetchone()[0]
+    if _neq_ok > 0:
+        _neq_total = fitrs.data_store.con.execute(
+            "SELECT COUNT(*) FROM transparency WHERE instrument_type = 'non_equity'"
+        ).fetchone()[0]
+        print(f"  Already indexed: {_neq_total:,} non-equity records -- skipping download")
+    else:
+        result = edm.transparency.index('FULNCR', latest_only=True)
+        print(f"  Status          : {result.get('status')}")
+        print(f"  Files processed : {result.get('files_processed')}")
+        print(f"  Records loaded  : {result.get('total_records', 0):,}")
 
-# Example 3: Look up transparency for specific ISIN
-print("=" * 60)
-print("Lookup Transparency by ISIN")
-print("=" * 60)
+    # 2b. Index non-equity sub-class data (FULNCR_NYAR)
+    print("\n2b. Index Non-Equity Sub-Class Data (FULNCR_NYAR)")
+    print("-" * 60)
+    _nyar_count = fitrs.data_store.con.execute(
+        "SELECT COUNT(*) FROM subclass_transparency"
+    ).fetchone()[0]
+    if _nyar_count > 0:
+        print(f"  Already indexed: {_nyar_count:,} sub-class records -- skipping download")
+    else:
+        result = edm.transparency.index('FULNCR_NYAR', latest_only=True)
+        print(f"  Status          : {result.get('status')}")
+        print(f"  Files processed : {result.get('files_processed')}")
+        print(f"  Records loaded  : {result.get('total_records', 0):,}")
 
-isin = 'GB00B1YW4409'  # Example ISIN
-trans_data = transparency(isin)
+    # 3. Direct ISIN lookup
+    print("\n3. Transparency Lookup by ISIN")
+    print("-" * 60)
+    isin = 'GB00B1YW4409'
+    trans = edm.transparency(isin)
+    if trans:
+        print(f"  ISIN                  : {trans.get('isin')}")
+        print(f"  Liquid market         : {trans.get('liquid_market')}")
+        print(f"  Average daily turnover: {trans.get('average_daily_turnover')}")
+        print(f"  Methodology           : {trans.get('methodology')}")
+        print(f"  Instrument type       : {trans.get('instrument_type')}")
+    else:
+        print(f"  No transparency data found for {isin}")
 
-if trans_data:
-    print(f"ISIN: {trans_data['isin']}")
-    print(f"Liquid Market: {trans_data['liquid_market']}")
-    print(f"Average Daily Turnover: {trans_data.get('average_daily_turnover')}")
-    print(f"Instrument Type: {trans_data['instrument_type']}")
-else:
-    print(f"No transparency data found for {isin}")
-print()
+    # 4. Query liquid instruments with high turnover
+    print("\n4. Liquid Instruments (Turnover > 1M)")
+    print("-" * 60)
+    liquid_df = edm.transparency.query(
+        liquid_only=True,
+        min_turnover=1_000_000,
+        limit=10
+    )
+    print(f"  Found: {len(liquid_df)} instruments")
+    if not liquid_df.empty:
+        cols = [c for c in ('isin', 'liquid_market', 'average_daily_turnover',
+                            'instrument_type') if c in liquid_df.columns]
+        print(liquid_df[cols].to_string(index=False))
 
-# Example 4: Query liquid instruments with high turnover
-print("=" * 60)
-print("Query Liquid Instruments (Turnover > 1M)")
-print("=" * 60)
+    # 5. Sub-class transparency -- show first available asset class
+    print("\n5. Sub-Class Transparency")
+    print("-" * 60)
+    _available = fitrs.data_store.con.execute(
+        "SELECT DISTINCT asset_class FROM subclass_transparency ORDER BY asset_class LIMIT 5"
+    ).fetchdf()
+    if _available.empty:
+        print("  No sub-class records indexed yet.")
+    else:
+        first_class = _available.iloc[0]['asset_class']
+        print(f"  Available asset classes (sample): {', '.join(_available['asset_class'].tolist())}")
+        subclass_df = edm.transparency.query_subclass(asset_class=first_class, limit=5)
+        print(f"  Sample -- asset class '{first_class}': {len(subclass_df)} records")
+        if not subclass_df.empty:
+            print(subclass_df.head(5).to_string(index=False))
 
-liquid_df = transparency.query(
-    liquid_only=True,
-    min_turnover=1_000_000,
-    limit=10
-)
+    # 6. Methodology reference codes
+    print("\n6. Available Methodologies")
+    print("-" * 60)
+    fitrs = FITRSClient()
+    for m in fitrs.list_methodologies():
+        print(f"  {m['code']:6} : {m['description']}")
 
-print(f"Found {len(liquid_df)} liquid instruments")
-print(liquid_df[['isin', 'liquid_market', 'average_daily_turnover', 'instrument_type']].head())
-print()
+    # 7. Cross-table query in the unified database (no ATTACH needed)
+    print("\n7. Cross-Table Query: Instruments + Transparency (Unified DB)")
+    print("-" * 60)
+    firds = edm.FIRDSClient()
+    df = firds.query_database("""
+        SELECT
+            i.isin,
+            i.full_name,
+            i.cfi_code,
+            t.liquid_market,
+            t.average_daily_turnover,
+            t.methodology
+        FROM instruments i
+        JOIN transparency t ON i.isin = t.isin
+        WHERE t.liquid_market = TRUE
+          AND t.average_daily_turnover > 5000000
+        ORDER BY t.average_daily_turnover DESC
+        LIMIT 10
+    """)
+    print(f"  Found: {len(df)} liquid instruments with reference data")
+    if not df.empty:
+        print(df[['isin', 'full_name', 'average_daily_turnover']].head(5).to_string(
+            index=False
+        ))
 
-# Example 5: Query by instrument type
-print("=" * 60)
-print("Query Equity Transparency Only")
-print("=" * 60)
+    # 8. Liquidity rate by CFI category
+    print("\n8. Liquidity Rate by CFI Category")
+    print("-" * 60)
+    df2 = firds.query_database("""
+        SELECT
+            SUBSTR(i.cfi_code, 1, 1)                               AS asset_type,
+            COUNT(*)                                                AS total,
+            SUM(CASE WHEN t.liquid_market = TRUE THEN 1 ELSE 0 END) AS liquid,
+            ROUND(AVG(t.average_daily_turnover), 0)                AS avg_turnover
+        FROM instruments i
+        JOIN transparency t ON i.isin = t.isin
+        WHERE i.cfi_code IS NOT NULL
+        GROUP BY SUBSTR(i.cfi_code, 1, 1)
+        ORDER BY total DESC
+    """)
+    print(df2.to_string(index=False))
 
-equity_df = transparency.query(
-    instrument_type='equity',
-    limit=10
-)
 
-print(f"Found {len(equity_df)} equity instruments")
-print(equity_df[['isin', 'liquid_market', 'average_daily_turnover']].head())
-print()
-
-# Example 6: Cross-database query with FIRDS
-print("=" * 60)
-print("Cross-Database Query: FIRDS + FITRS")
-print("=" * 60)
-
-# Attach FIRDS database for combined queries
-transparency.attach_firds()
-
-# Query combining reference data and transparency metrics
-sql = """
-SELECT 
-    f.isin,
-    f.full_name,
-    f.cfi_code,
-    t.liquid_market,
-    t.average_daily_turnover,
-    t.instrument_type
-FROM firds.instruments f
-JOIN transparency t ON f.isin = t.isin
-WHERE t.liquid_market = 'Y'
-  AND t.average_daily_turnover > 5000000
-ORDER BY t.average_daily_turnover DESC
-LIMIT 10
-"""
-
-combined_df = transparency.client.data_store.query(sql)
-
-print(f"Found {len(combined_df)} liquid instruments with reference data")
-print(combined_df[['isin', 'full_name', 'liquid_market', 'average_daily_turnover']].head())
-print()
-
-# Example 7: Analyze transparency by asset type
-print("=" * 60)
-print("Transparency Analysis by Asset Type")
-print("=" * 60)
-
-sql = """
-SELECT 
-    SUBSTR(f.cfi_code, 1, 1) as asset_type,
-    COUNT(*) as total_instruments,
-    SUM(CASE WHEN t.liquid_market = 'Y' THEN 1 ELSE 0 END) as liquid_count,
-    AVG(t.average_daily_turnover) as avg_turnover,
-    MAX(t.average_daily_turnover) as max_turnover
-FROM firds.instruments f
-JOIN transparency t ON f.isin = t.isin
-WHERE f.cfi_code IS NOT NULL
-GROUP BY SUBSTR(f.cfi_code, 1, 1)
-ORDER BY total_instruments DESC
-"""
-
-analysis_df = transparency.client.data_store.query(sql)
-
-print("Asset Type Distribution:")
-print(analysis_df)
-print()
-
-# Example 8: Find illiquid derivatives
-print("=" * 60)
-print("Find Illiquid Derivatives")
-print("=" * 60)
-
-sql = """
-SELECT 
-    f.isin,
-    f.full_name,
-    f.cfi_code,
-    t.liquid_market,
-    t.average_daily_turnover
-FROM firds.instruments f
-JOIN transparency t ON f.isin = t.isin
-WHERE SUBSTR(f.cfi_code, 1, 1) IN ('F', 'O', 'H', 'J', 'K', 'L', 'M', 'T')
-  AND t.liquid_market = 'N'
-LIMIT 10
-"""
-
-illiquid_df = transparency.client.data_store.query(sql)
-
-print(f"Found {len(illiquid_df)} illiquid derivatives")
-if not illiquid_df.empty:
-    print(illiquid_df[['isin', 'cfi_code', 'liquid_market']].head())
-print()
-
-print("=" * 60)
-print("Transparency API Examples Complete")
-print("=" * 60)
+if __name__ == "__main__":
+    main()

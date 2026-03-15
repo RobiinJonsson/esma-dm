@@ -118,16 +118,16 @@ def main():
         
         print(f"   Keeping {len(files_to_keep)} newest files:")
         for f in files_to_keep:
-            print(f"     ✓ {f.name}")
-        
+            print(f"     {f.name}")
+
         print(f"   Removing {len(files_to_remove)} older files:")
         for f in files_to_remove:
             try:
                 size_mb = f.stat().st_size / (1024 * 1024)
                 f.unlink()
-                print(f"     ✗ {f.name} ({size_mb:.1f} MB freed)")
+                print(f"     Removed {f.name} ({size_mb:.1f} MB freed)")
             except Exception as e:
-                print(f"     ✗ Failed to remove {f.name}: {e}")
+                print(f"     Failed to remove {f.name}: {e}")
     else:
         print("   No cleanup needed (≤2 files)")
     
@@ -135,10 +135,10 @@ def main():
     print("=== Workflow Complete ===")
     print()
     print("Summary:")
-    print("✅ Downloaded latest equity files from ESMA")
-    print("✅ Indexed files into database using component-based API")
-    print("✅ Cleaned up older cached files")
-    print("✅ Verified data integrity with sample queries")
+    print("- Downloaded latest equity files from ESMA")
+    print("- Indexed files into database using component-based API")
+    print("- Cleaned up older cached files")
+    print("- Verified data integrity with sample queries")
     print()
     print("Component API used:")
     print("  - firds.download.get_latest_full_files(asset_type='E', update=True)")

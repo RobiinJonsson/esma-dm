@@ -4,7 +4,52 @@ All notable changes to the esma-dm project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.3.8] - 2026-03-08
+## [0.3.8] - 2026-03-14
+
+### Fixed - FITRS transparency PRIMARY KEY and NYAR indexing
+
+**`transparency` table PRIMARY KEY redesign** (`esma_dm/storage/schema/fitrs_schema.py`,
+`esma_dm/storage/fitrs/store.py`):
+
+- Prior schema used `isin TEXT PRIMARY KEY` (0.3.7) then `tech_record_id INTEGER
+  PRIMARY KEY` (attempted fix) — both wrong. Neither field is unique across the full
+  dataset: multiple records per ISIN exist for different methodologies (`SINT`, `YEAR`,
+  `ESTM`, `FFWK`), and `tech_record_id` resets to 1 in each source file.
+- Replaced with surrogate `id BIGINT PRIMARY KEY DEFAULT nextval('seq_transparency_id')`,
+  with `isin` and `tech_record_id` as plain indexed columns.
+- `insert_transparency_data` changed from `INSERT OR REPLACE` to plain `INSERT`,
+  preserving all multi-methodology records. Table is cleared before each full re-index.
+
+**NYAR/SISC file filter fix** (`esma_dm/clients/fitrs.py`):
+
+- `index_transparency_data('FULNCR_NYAR')` matched `str.contains('FULNCR_NYAR')` — the
+  substring never appears in ESMA filenames (actual pattern: `FULNCR_20260314_NYAR_…`).
+  Fixed to extract the sub-code (`NYAR`/`SISC`) and match `_NYAR_`/`_SISC_` instead.
+- Date extraction pattern was also wrong for NYAR files; corrected to
+  `r"FULNCR_(?P<date>\d{8})_{sub_code}_(?P<asset>\w+)"`.
+- `index_cached_files()` now excludes NYAR/SISC files from the main FULECR/FULNCR
+  indexing loop (they belong in `subclass_transparency`, not `transparency`).
+
+### Added
+
+- `scripts/fix_transparency_pk.py` — one-shot script to drop and recreate the
+  `transparency` table (and its child tables) with the correct sequence-based surrogate
+  PK. Handles DuckDB's lack of `ALTER TABLE … DROP PRIMARY KEY` via DROP + CREATE.
+- `examples/11_reindex_transparency.py` — full sync-and-reindex workflow:
+  queries ESMA for the latest file list, downloads missing files, removes stale
+  cached CSVs, clears and reloads `transparency`, and indexes `subclass_transparency`
+  (NYAR). Prints a verification summary including liquidity percentages per
+  instrument type.
+
+### Result after loading (20260314 data)
+
+```
+transparency total      : 18,137,799
+  - equity              :     82,668
+  - non-equity          : 18,055,131
+liquid_market populated : 17,629,754  (97.2 %)
+subclass_transparency   :      6,691
+```
 
 ### Fixed
 

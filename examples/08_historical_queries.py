@@ -156,7 +156,7 @@ def main():
         print(f"Date range: {s['earliest_date']} to {s['latest_date']}")
     else:
         print("No temporal tracking data found yet")
-        print("Initialize with: firds.data_store.initialize(mode='historical')")
+        print("Initialize with: firds.data_store.initialize(mode='history')")
     
     print("\n" + "="*60)
     print("Historical database enables regulatory compliance:")

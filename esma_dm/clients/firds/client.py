@@ -501,16 +501,16 @@ class FIRDSClient:
         dashboard = self.get_analytics_dashboard()
         
         if 'error' in dashboard:
-            print(f"❌ Analytics failed: {dashboard['error']}")
+            print(f"Analytics failed: {dashboard['error']}")
             return
-        
+
         print("=" * 80)
-        print("🏦 ESMA FIRDS DATABASE ANALYTICS DASHBOARD")
+        print("ESMA FIRDS DATABASE ANALYTICS DASHBOARD")
         print("=" * 80)
         
         # Executive Summary
         exec_summary = dashboard['executive_summary']
-        print(f"\n📊 EXECUTIVE SUMMARY")
+        print("\nEXECUTIVE SUMMARY")
         print(f"   Database Mode: {exec_summary['database_mode'].upper()}")
         print(f"   Total Instruments: {exec_summary['total_instruments']:,}")
         print(f"   Total Listings: {exec_summary['total_listings']:,}")
@@ -520,13 +520,13 @@ class FIRDSClient:
             print(f"   Last Updated: {exec_summary['last_updated']}")
         
         # Asset Distribution
-        print(f"\n🏷️  ASSET TYPE DISTRIBUTION")
+        print("\nASSET TYPE DISTRIBUTION")
         for asset in dashboard['asset_distribution'][:5]:  # Top 5
             print(f"   {asset['asset_type']} - {asset['asset_name']}: "
                   f"{asset['instrument_count']:,} ({asset['percentage']}%)")
         
         # Top Venues
-        print(f"\n🏛️  TOP TRADING VENUES")
+        print("\nTOP TRADING VENUES")
         for venue in dashboard['top_venues'][:5]:  # Top 5
             print(f"   {venue['trading_venue_id']}: "
                   f"{venue['unique_instruments']:,} instruments, "
@@ -534,23 +534,18 @@ class FIRDSClient:
         
         # Market Insights
         market = dashboard['market_insights']
-        print(f"\n📈 MARKET STRUCTURE INSIGHTS")
+        print("\nMARKET STRUCTURE INSIGHTS")
         print(f"   Cross-listed Instruments: {market['cross_listing_stats']['instruments_with_multiple_venues']:,} "
               f"({market['cross_listing_stats']['cross_listing_percentage']}%)")
         
         # Data Quality
-        print(f"\n✅ DATA QUALITY METRICS")
+        print("\nDATA QUALITY METRICS")
         for quality_check in dashboard['data_quality']['missing_data']:
-            if quality_check['missing_percentage'] < 10:
-                status = "✅"
-            elif quality_check['missing_percentage'] < 25:
-                status = "⚠️"
-            else:
-                status = "❌"
-            print(f"   {status} {quality_check['field']}: "
+            status = "OK" if quality_check['missing_percentage'] < 10 else "WARN"
+            print(f"   [{status}] {quality_check['field']}: "
                   f"{quality_check['missing_percentage']}% missing")
-        
-        print(f"\n💾 STORAGE DISTRIBUTION")
+
+        print("\nSTORAGE DISTRIBUTION")
         for storage in dashboard['storage_stats']:
             print(f"   {storage['table_name']}: {storage['row_count']:,} rows")
         

@@ -84,5 +84,5 @@ for category, criteria in sorted(categories.items()):
         print(f"     {code:15} : {description}")
 
 print("\n" + "=" * 80)
-print("✓ All transparency utility enums working correctly")
+print("All transparency utility enums working correctly")
 print("=" * 80)

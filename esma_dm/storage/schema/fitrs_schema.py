@@ -11,10 +11,13 @@ def create_transparency_table(con) -> None:
     Full MiFIR transparency fields per ESMA65-8-5240 documentation.
     Supports both FULECR (equity) and FULNCR (non-equity) ISIN-level results.
     """
+    con.execute("CREATE SEQUENCE IF NOT EXISTS seq_transparency_id START 1")
+
     con.execute("""
         CREATE TABLE IF NOT EXISTS transparency (
+            id BIGINT PRIMARY KEY DEFAULT nextval('seq_transparency_id'),
             tech_record_id INTEGER,
-            isin TEXT PRIMARY KEY,
+            isin TEXT,
             
             -- Classification
             instrument_classification TEXT,
@@ -70,6 +73,7 @@ def create_transparency_table(con) -> None:
     """)
     
     # Create indexes
+    con.execute("CREATE INDEX IF NOT EXISTS idx_transparency_isin ON transparency(isin)")
     con.execute("CREATE INDEX IF NOT EXISTS idx_transparency_classification ON transparency(instrument_classification)")
     con.execute("CREATE INDEX IF NOT EXISTS idx_transparency_type ON transparency(instrument_type)")
     con.execute("CREATE INDEX IF NOT EXISTS idx_transparency_liquid ON transparency(liquid_market)")
@@ -88,10 +92,7 @@ def create_equity_transparency_details_table(con) -> None:
             isin TEXT PRIMARY KEY,
             
             -- Reserved for FULECR-specific fields
-            attributes JSON,
-            
-            -- Reference
-            FOREIGN KEY (isin) REFERENCES transparency(isin)
+            attributes JSON
         )
     """)
 
@@ -106,10 +107,7 @@ def create_non_equity_transparency_details_table(con) -> None:
             isin TEXT PRIMARY KEY,
             
             -- Reserved for FULNCR-specific fields  
-            attributes JSON,
-            
-            -- Reference
-            FOREIGN KEY (isin) REFERENCES transparency(isin)
+            attributes JSON
         )
     """)
 
