@@ -191,8 +191,17 @@ def download_files(file_type: str, asset_type: str, update: bool):
                     update=update
                 )
             else:
-                console.print("[yellow]Delta file downloads coming soon![/yellow]\n")
-                return
+                # DLTINS delta files
+                from esma_dm.clients.firds import FIRDSClient
+                firds = FIRDSClient(mode='history')
+                today = datetime.today().strftime('%Y-%m-%d')
+                df = firds.downloader.get_delta_files(
+                    asset_type=asset_type,
+                    date_from='2018-01-01',
+                    date_to=today,
+                    update=update
+                )
+                result = []  # delta files are cached by the downloader internally
         
         if result:
             console.print(f"\n[bold green]Success![/bold green] Downloaded {len(result)} file(s)")
@@ -701,6 +710,363 @@ def show_stats():
             console.print(asset_table)
             console.print()
         
+    except Exception as e:
+        console.print(f"\n[bold red]Error:[/bold red] {str(e)}\n")
+        raise click.Abort()
+
+
+@firds_cli.command(name='index')
+@click.option('--asset', 'asset_type',
+              type=click.Choice(['C', 'D', 'E', 'F', 'H', 'I', 'J', 'O', 'R', 'S'], case_sensitive=False),
+              help='Filter by asset type (default: all)')
+@click.option('--mode', default='current', type=click.Choice(['current', 'history'], case_sensitive=False),
+              help='Database mode (default: current)')
+@click.option('--latest-only/--all-files', default=True,
+              help='Index only the most recent file per asset type (default: latest only)')
+@click.option('--file-type', 'file_type',
+              type=click.Choice(['FULINS', 'DLTINS'], case_sensitive=False),
+              default='FULINS', show_default=True,
+              help='File type to index')
+def index_files(asset_type: Optional[str], mode: str, latest_only: bool, file_type: str):
+    """
+    Index downloaded CSV files into the database.
+
+    Reads cached CSV files and loads them into DuckDB. Run after downloading files.
+
+    DLTINS indexing is only supported in history mode.
+
+    Examples:
+
+        esma-dm firds index
+
+        esma-dm firds index --mode history
+
+        esma-dm firds index --asset E --mode history
+
+        esma-dm firds index --file-type DLTINS --mode history
+    """
+    try:
+        from esma_dm.clients.firds import FIRDSClient
+
+        if file_type.upper() == 'DLTINS' and mode != 'history':
+            console.print("\n[bold red]Error:[/bold red] DLTINS indexing requires --mode history\n")
+            raise click.Abort()
+
+        console.print(f"\n[bold cyan]Indexing {file_type} files into {mode} database...[/bold cyan]\n")
+
+        firds = FIRDSClient(mode=mode)
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console
+        ) as progress:
+            task = progress.add_task("Indexing...", total=None)
+            result = firds.index_cached_files(
+                asset_type=asset_type,
+                latest_only=latest_only,
+                file_type=file_type.upper()
+            )
+
+        console.print(f"\n[bold green]Indexing complete.[/bold green]")
+        console.print(f"  Files processed : {result.get('files_processed', 0)}")
+        console.print(f"  Instruments     : {result.get('total_instruments', 0)}")
+        console.print(f"  Files skipped   : {result.get('files_skipped', 0)}")
+
+        failed = result.get('failed_files', [])
+        if failed:
+            console.print(f"\n[yellow]Failed files ({len(failed)}):[/yellow]")
+            for f in failed[:5]:
+                console.print(f"  {f}")
+
+        console.print()
+
+    except click.Abort:
+        raise
+    except Exception as e:
+        console.print(f"\n[bold red]Error:[/bold red] {str(e)}\n")
+        raise click.Abort()
+
+
+@firds_cli.command(name='process-deltas')
+@click.option('--asset', 'asset_type',
+              type=click.Choice(['C', 'D', 'E', 'F', 'H', 'I', 'J', 'O', 'R', 'S'], case_sensitive=False),
+              required=True,
+              help='Asset type to process')
+@click.option('--from', 'date_from',
+              help='Start date (YYYY-MM-DD)')
+@click.option('--to', 'date_to',
+              help='End date (YYYY-MM-DD, default: today)')
+@click.option('--update/--no-update', default=False,
+              help='Force re-download of delta files')
+def process_deltas(asset_type: str, date_from: Optional[str], date_to: Optional[str], update: bool):
+    """
+    Process DLTINS delta files into the history database.
+
+    Downloads (or uses cached) DLTINS files for the date range and applies
+    ESMA Section 8.2 version management: NEW, MODIFIED, TERMINATED, CANCELLED.
+
+    Requires history mode database.
+
+    Examples:
+
+        esma-dm firds process-deltas --asset E --from 2026-01-06 --to 2026-01-10
+
+        esma-dm firds process-deltas --asset E --from 2026-01-06
+
+        esma-dm firds process-deltas --asset D --from 2026-01-06 --update
+    """
+    try:
+        from esma_dm.clients.firds import FIRDSClient
+
+        date_to_use = date_to or datetime.today().strftime('%Y-%m-%d')
+        date_from_use = date_from or '2018-01-01'
+
+        console.print(f"\n[bold cyan]Processing delta files for asset type {asset_type}[/bold cyan]")
+        console.print(f"  Date range : {date_from_use} to {date_to_use}")
+        console.print(f"  Mode       : history\n")
+
+        firds = FIRDSClient(mode='history')
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console
+        ) as progress:
+            task = progress.add_task("Processing delta records...", total=None)
+            stats = firds.process_deltas(
+                asset_type=asset_type.upper(),
+                date_from=date_from_use,
+                date_to=date_to_use,
+                update=update
+            )
+
+        console.print(f"\n[bold green]Delta processing complete.[/bold green]")
+
+        stats_table = Table(title="Processing Summary", box=box.ROUNDED)
+        stats_table.add_column("Record Type", style="cyan")
+        stats_table.add_column("Count", style="white", justify="right")
+
+        stats_table.add_row("Total processed", str(stats.get('records_processed', 0)))
+        stats_table.add_row("NEW", str(stats.get('new', 0)))
+        stats_table.add_row("MODIFIED", str(stats.get('modified', 0)))
+        stats_table.add_row("TERMINATED", str(stats.get('terminated', 0)))
+        stats_table.add_row("CANCELLED", str(stats.get('cancelled', 0)))
+        stats_table.add_row("Errors", str(stats.get('errors', 0)))
+
+        console.print(stats_table)
+        console.print()
+
+    except Exception as e:
+        console.print(f"\n[bold red]Error:[/bold red] {str(e)}\n")
+        raise click.Abort()
+
+
+@firds_cli.command(name='history')
+@click.argument('isin')
+def instrument_history(isin: str):
+    """
+    Show full version history for an instrument (history mode).
+
+    Displays all versions from both the active instruments table and the
+    instrument_history archive, ordered by version number.
+
+    Examples:
+
+        esma-dm firds history GB00B1YW4409
+
+        esma-dm firds history US0378331005
+    """
+    try:
+        from esma_dm.clients.firds import FIRDSClient
+
+        firds = FIRDSClient(mode='history')
+        isin_upper = isin.upper()
+
+        df = firds.data_store.get_instrument_version_history(isin_upper)
+
+        if df.empty:
+            console.print(f"\n[yellow]No history found for ISIN:[/yellow] {isin_upper}\n")
+            return
+
+        console.print(f"\n[bold cyan]Version history for {isin_upper}[/bold cyan]  ({len(df)} version(s))\n")
+
+        table = Table(box=box.ROUNDED, show_lines=False)
+        table.add_column("Version", style="cyan", width=8, justify="right")
+        table.add_column("Record Type", style="magenta", width=12)
+        table.add_column("Valid From", style="green", width=12)
+        table.add_column("Valid To", style="yellow", width=12)
+        table.add_column("Name", style="white")
+        table.add_column("Source File", style="dim", no_wrap=False, max_width=35)
+
+        for _, row in df.iterrows():
+            version = str(int(row['version_number'])) if pd.notna(row['version_number']) else '-'
+            record_type = str(row['record_type']) if pd.notna(row['record_type']) else '-'
+
+            valid_from = str(row['valid_from_date'])[:10] if pd.notna(row['valid_from_date']) else '-'
+            valid_to = str(row['valid_to_date'])[:10] if pd.notna(row['valid_to_date']) else '[green]active[/green]'
+
+            name = str(row['full_name'])[:40] if pd.notna(row['full_name']) else '-'
+            source = str(row['source_file']) if pd.notna(row['source_file']) else '-'
+
+            type_style = {
+                'NEW': '[green]NEW[/green]',
+                'MODIFIED': '[yellow]MODIFIED[/yellow]',
+                'TERMINATED': '[red]TERMINATED[/red]',
+                'CANCELLED': '[red]CANCELLED[/red]',
+                'FULINS': '[cyan]FULINS[/cyan]',
+            }.get(record_type.upper(), record_type)
+
+            table.add_row(version, type_style, valid_from, valid_to, name, source)
+
+        console.print(table)
+        console.print()
+
+    except Exception as e:
+        console.print(f"\n[bold red]Error:[/bold red] {str(e)}\n")
+        raise click.Abort()
+
+
+@firds_cli.command(name='changes')
+@click.argument('isin')
+@click.option('--from', 'date_from',
+              help='Start date (YYYY-MM-DD)')
+@click.option('--to', 'date_to',
+              help='End date (YYYY-MM-DD, default: today)')
+def instrument_changes(isin: str, date_from: Optional[str], date_to: Optional[str]):
+    """
+    Show modifications and cancellations for an instrument (history mode).
+
+    Queries the instrument_history and cancellations tables to display all
+    record-type changes for an ISIN, optionally restricted to a date range.
+
+    Examples:
+
+        esma-dm firds changes GB00B1YW4409
+
+        esma-dm firds changes GB00B1YW4409 --from 2026-01-01 --to 2026-01-31
+
+        esma-dm firds changes US0378331005 --from 2026-01-06
+    """
+    try:
+        from esma_dm.clients.firds import FIRDSClient
+
+        firds = FIRDSClient(mode='history')
+        isin_upper = isin.upper()
+        date_to_use = date_to or datetime.today().strftime('%Y-%m-%d')
+
+        console.print(f"\n[bold cyan]Changes for {isin_upper}[/bold cyan]")
+        if date_from:
+            console.print(f"  Period: {date_from} to {date_to_use}\n")
+        else:
+            console.print()
+
+        con = firds.data_store.con
+
+        # Query modifications from instrument_history
+        mod_params = [isin_upper]
+        mod_where = "WHERE isin = ?"
+        if date_from:
+            mod_where += " AND valid_from_date >= ?"
+            mod_params.append(date_from)
+        if date_to:
+            mod_where += " AND valid_from_date <= ?"
+            mod_params.append(date_to_use)
+
+        modifications = con.execute(f"""
+            SELECT version_number, record_type, valid_from_date, valid_to_date,
+                   full_name, cfi_code, issuer, source_file
+            FROM instrument_history
+            {mod_where}
+            ORDER BY version_number DESC
+        """, mod_params).fetchdf()
+
+        # Also include current record if MODIFIED
+        current = con.execute("""
+            SELECT version_number, record_type, valid_from_date, valid_to_date,
+                   full_name, cfi_code, issuer, source_file
+            FROM instruments
+            WHERE isin = ? AND record_type = 'MODIFIED'
+        """, [isin_upper]).fetchdf()
+
+        if not modifications.empty or not current.empty:
+            all_mods = pd.concat([current, modifications], ignore_index=True) if not current.empty else modifications
+
+            console.print(f"[bold]Modifications[/bold]  ({len(all_mods)} version(s))\n")
+
+            mod_table = Table(box=box.ROUNDED, show_lines=False)
+            mod_table.add_column("Version", style="cyan", width=8, justify="right")
+            mod_table.add_column("Type", style="magenta", width=12)
+            mod_table.add_column("Valid From", style="green", width=12)
+            mod_table.add_column("Valid To", style="yellow", width=12)
+            mod_table.add_column("Name", style="white", max_width=40)
+            mod_table.add_column("Source File", style="dim", max_width=35)
+
+            for _, row in all_mods.iterrows():
+                version = str(int(row['version_number'])) if pd.notna(row['version_number']) else '-'
+                record_type = str(row['record_type']) if pd.notna(row['record_type']) else '-'
+                valid_from = str(row['valid_from_date'])[:10] if pd.notna(row['valid_from_date']) else '-'
+                valid_to = str(row['valid_to_date'])[:10] if pd.notna(row['valid_to_date']) else '[green]active[/green]'
+                name = str(row['full_name'])[:40] if pd.notna(row['full_name']) else '-'
+                source = str(row['source_file']) if pd.notna(row['source_file']) else '-'
+
+                type_style = {
+                    'NEW': '[green]NEW[/green]',
+                    'MODIFIED': '[yellow]MODIFIED[/yellow]',
+                    'TERMINATED': '[red]TERMINATED[/red]',
+                }.get(record_type.upper(), record_type)
+
+                mod_table.add_row(version, type_style, valid_from, valid_to, name, source)
+
+            console.print(mod_table)
+        else:
+            console.print("[dim]No modifications found for this instrument in the selected period.[/dim]")
+
+        console.print()
+
+        # Query cancellations
+        can_params = [isin_upper]
+        can_where = "WHERE isin = ?"
+        if date_from:
+            can_where += " AND cancellation_date >= ?"
+            can_params.append(date_from)
+        if date_to:
+            can_where += " AND cancellation_date <= ?"
+            can_params.append(date_to_use)
+
+        cancellations = con.execute(f"""
+            SELECT version_number, cancellation_date, cancellation_reason,
+                   cfi_code, full_name, issuer, original_source_file, cancelled_by_file
+            FROM cancellations
+            {can_where}
+            ORDER BY cancellation_date DESC
+        """, can_params).fetchdf()
+
+        if not cancellations.empty:
+            console.print(f"[bold]Cancellations[/bold]  ({len(cancellations)} record(s))\n")
+
+            can_table = Table(box=box.ROUNDED, show_lines=False)
+            can_table.add_column("Version", style="cyan", width=8, justify="right")
+            can_table.add_column("Cancelled On", style="red", width=14)
+            can_table.add_column("Reason", style="yellow")
+            can_table.add_column("Name", style="white", max_width=40)
+            can_table.add_column("Cancelled By", style="dim", max_width=35)
+
+            for _, row in cancellations.iterrows():
+                version = str(int(row['version_number'])) if pd.notna(row['version_number']) else '-'
+                cancel_date = str(row['cancellation_date'])[:10] if pd.notna(row['cancellation_date']) else '-'
+                reason = str(row['cancellation_reason']) if pd.notna(row['cancellation_reason']) else '-'
+                name = str(row['full_name'])[:40] if pd.notna(row['full_name']) else '-'
+                cancelled_by = str(row['cancelled_by_file']) if pd.notna(row['cancelled_by_file']) else '-'
+
+                can_table.add_row(version, cancel_date, reason, name, cancelled_by)
+
+            console.print(can_table)
+        else:
+            console.print("[dim]No cancellations found for this instrument in the selected period.[/dim]")
+
+        console.print()
+
     except Exception as e:
         console.print(f"\n[bold red]Error:[/bold red] {str(e)}\n")
         raise click.Abort()

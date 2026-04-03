@@ -389,18 +389,21 @@ def create_metadata_table(con):
 
 
 def create_cancellations_table(con):
-    """Create table for cancelled records (FULCAN files)."""
+    """Create table for cancelled records (FULCAN files and delta CANCELLED records)."""
     con.execute("""
         CREATE SEQUENCE IF NOT EXISTS seq_cancellations_id START 1;
-        
+
         CREATE TABLE IF NOT EXISTS cancellations (
             id INTEGER PRIMARY KEY DEFAULT nextval('seq_cancellations_id'),
             isin VARCHAR NOT NULL,
-            trading_venue_id VARCHAR,
+            version_number INTEGER,
             cancellation_date DATE,
             cancellation_reason VARCHAR,
-            original_publication_date DATE,
-            source_file VARCHAR,
+            cfi_code VARCHAR,
+            full_name VARCHAR,
+            issuer VARCHAR,
+            original_source_file VARCHAR,
+            cancelled_by_file VARCHAR,
             indexed_at TIMESTAMP
         )
     """)

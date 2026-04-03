@@ -24,7 +24,7 @@ def test_delta_processing():
     print("=" * 60)
     
     # Initialize client
-    firds = FIRDSClient()
+    firds = FIRDSClient(mode='history')
     
     # Initialize clean database
     print("\n1. Initializing clean database...")
@@ -34,7 +34,7 @@ def test_delta_processing():
     except:
         pass
     
-    firds.data_store.initialize(mode='current')
+    firds.data_store.initialize(mode='history')
     print("   Database initialized")
     
     # Test 1: NEW record (first time)

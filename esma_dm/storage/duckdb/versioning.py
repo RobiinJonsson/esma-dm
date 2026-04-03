@@ -103,10 +103,10 @@ class DuckDBVersioning:
         self.con.execute("""
             INSERT OR REPLACE INTO instruments 
             (isin, valid_from_date, valid_to_date, latest_record_flag, record_type,
-             version_number, source_file_type, last_update_timestamp, 
+             version_number, source_file, source_file_type, last_update_timestamp, 
              full_name, cfi_code, issuer)
-            VALUES (?, ?, NULL, TRUE, ?, ?, 'DLTINS', ?, ?, ?, ?)
-        """, [isin, publication_date, record_type, next_version,
+            VALUES (?, ?, NULL, TRUE, 'NEW', ?, ?, 'DLTINS', ?, ?, ?, ?)
+        """, [isin, publication_date, next_version, source_file,
               datetime.now().isoformat(), 
               record_data.get('full_name'),
               record_data.get('cfi_code'),
@@ -150,14 +150,14 @@ class DuckDBVersioning:
             SET version_number = ?,
                 valid_from_date = ?,
                 valid_to_date = NULL,
-                record_type = ?,
+                record_type = 'MODIFIED',
                 last_update_timestamp = ?,
                 full_name = ?,
                 cfi_code = ?,
                 issuer = ?,
                 source_file = ?
             WHERE isin = ? AND latest_record_flag = TRUE
-        """, [next_version, publication_date, record_type, datetime.now().isoformat(),
+        """, [next_version, publication_date, datetime.now().isoformat(),
               record_data.get('full_name'), record_data.get('cfi_code'),
               record_data.get('issuer'), source_file, isin])
         

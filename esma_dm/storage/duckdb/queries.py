@@ -340,7 +340,7 @@ class DuckDBQueries:
         self.connection._ensure_connection()
         
         sql = """
-            SELECT isin, cfi_code, full_name, issuer, indexed_at
+            SELECT isin, cfi_code, full_name, issuer, version_number, indexed_at
             FROM instruments
             ORDER BY indexed_at DESC
         """
