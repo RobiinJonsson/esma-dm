@@ -135,7 +135,19 @@ class Config:
         if mode not in DATABASE_MODES.values():
             raise ValueError(f"Invalid mode '{mode}'. Must be one of: {list(DATABASE_MODES.values())}")
         return self.database_path / f"esma_{mode}.duckdb"
-    
+
+    def get_hist_database_path(self) -> Path:
+        """
+        Get the path to the dedicated historical FIRDS database (esma_hist.duckdb).
+
+        This is the database built from FULINS baselines and daily DLTINS delta files,
+        maintained separately from the current-mode database.
+
+        Returns:
+            Path to esma_hist.duckdb in the database directory.
+        """
+        return self.database_path / "esma_hist.duckdb"
+
     @classmethod
     def from_env(cls) -> "Config":
         """
